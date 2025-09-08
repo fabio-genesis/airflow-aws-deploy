@@ -1,0 +1,97 @@
+########################################
+# Python / Virtualenv
+########################################
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.eggs/
+.build/
+dist/
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+.mypy_cache/
+.pytest_cache/
+.coverage*
+htmlcov/
+
+########################################
+# Airflow (logs e artefatos runtime)
+########################################
+logs/
+*/logs/
+airflow-webserver.pid
+airflow-scheduler.pid
+airflow-worker.pid
+airflow*.pid
+airflow.db
+airflow.cfg.backup
+tmp/
+
+########################################
+# Dados temporários / outputs locais
+########################################
+dags/data/*.csv
+!dags/data/README.md
+
+########################################
+# Terraform
+########################################
+.terraform/
+terraform.tfstate
+terraform.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+# (mantenha .terraform.lock.hcl versionado)
+
+########################################
+# Credenciais / Segredos
+########################################
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.crt
+
+########################################
+# AWS (caso apareça dentro do repo)
+########################################
+.aws/
+
+########################################
+# Docker / Compose
+########################################
+*.log
+docker-compose.override.yml
+
+########################################
+# IDE / Editor
+########################################
+.vscode/
+.idea/
+*.code-workspace
+
+########################################
+# SO / Sistema
+########################################
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+########################################
+# Outros
+########################################
+*.swp
+*.tmp
+*.bak
