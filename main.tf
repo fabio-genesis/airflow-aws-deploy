@@ -348,3 +348,87 @@ resource "aws_ecs_cluster" "this" {
   }
   tags = { Project = "airflow" }
 }
+
+resource "aws_ecs_task_definition" "airflow_web" {
+  family                   = "airflow-web"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = var.ecs_task_cpu
+  memory                   = var.ecs_task_memory
+
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn            = aws_iam_role.airflow_task_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name       = var.container_name
+      image      = "${aws_ecr_repository.airflow.repository_url}:${var.ecr_image_tag}"
+      essential  = true
+      command    = ["api-server"]
+      portMappings = [
+        {
+          containerPort = var.container_port
+          hostPort      = var.container_port
+          protocol      = "tcp"
+          appProtocol   = "http"
+        }
+      ]
+      environment = [
+        { name = "AIRFLOW__CORE__EXECUTOR",                    value = "LocalExecutor" },
+        { name = "AIRFLOW__CORE__AUTH_MANAGER",                value = "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager" },
+        { name = "AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION", value = "true" },
+        { name = "AIRFLOW__CORE__LOAD_EXAMPLES",               value = "false" },
+        { name = "AIRFLOW__LOGGING__HOSTNAME_CALLABLE",        value = "socket.gethostname" },
+        { name = "AIRFLOW__API__BASE_URL",                     value = "http://${aws_lb.airflow_alb.dns_name}" },
+        { name = "AIRFLOW__LOGGING__BASE_URL",                 value = "http://${aws_lb.airflow_alb.dns_name}" },
+        {
+          name  = "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN",
+          value = "postgresql+psycopg2://${var.db_username}:${var.db_password}@${aws_db_instance.airflow_db.address}:${aws_db_instance.airflow_db.port}/${var.db_name}"
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.airflow.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "web"
+        }
+      }
+    }
+  ])
+
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = "X86_64"
+  }
+
+  tags = { Project = "airflow" }
+}
+
+
+resource "aws_ecs_service" "airflow_web" {
+  name            = var.ecs_service_name
+  cluster         = aws_ecs_cluster.this.id
+  task_definition = aws_ecs_task_definition.airflow_web.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = data.aws_subnets.default.ids
+    security_groups  = [aws_security_group.ecs_sg.id]
+    assign_public_ip = var.assign_public_ip
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.airflow_tg.arn
+    container_name   = var.container_name
+    container_port   = var.container_port
+  }
+
+  depends_on = [
+    aws_lb_listener.http_80,
+    aws_cloudwatch_log_group.airflow
+  ]
+
+  tags = { Project = "airflow" }
+}

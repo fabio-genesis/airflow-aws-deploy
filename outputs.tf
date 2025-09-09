@@ -66,3 +66,28 @@ output "ecr_repo_url" {
 output "ecr_repo_arn" {
   value = aws_ecr_repository.airflow.arn
 }
+
+output "alb_dns" {
+  description = "DNS público do ALB"
+  value       = aws_lb.airflow_alb.dns_name
+}
+
+output "ecs_cluster_id" {
+  description = "ID do ECS Cluster"
+  value       = aws_ecs_cluster.this.id
+}
+
+output "ecs_service_name" {
+  description = "Nome do ECS Service (web)"
+  value       = aws_ecs_service.airflow_web.name
+}
+
+output "web_taskdef_arn" {
+  description = "ARN do Task Definition (web)"
+  value       = aws_ecs_task_definition.airflow_web.arn
+}
+
+output "logs_group" {
+  description = "CloudWatch Log Group"
+  value       = aws_cloudwatch_log_group.airflow.name
+}
