@@ -112,3 +112,57 @@ variable "ecr_keep_last_images" {
   type        = number
   default     = 10
 }
+
+variable "ecr_image_tag" {
+  description = "Tag da imagem a usar no ECS"
+  type        = string
+  default     = "latest"
+}
+
+variable "ecs_cluster_name" {
+  description = "Nome do cluster ECS"
+  type        = string
+  default     = "airflow-ecs-cluster"
+}
+
+variable "ecs_service_name" {
+  description = "Nome do service ECS (web)"
+  type        = string
+  default     = "airflow-web"
+}
+
+variable "container_name" {
+  description = "Nome do container no task definition"
+  type        = string
+  default     = "airflow-api"
+}
+
+variable "container_port" {
+  description = "Porta exposta pelo container web"
+  type        = number
+  default     = 8080
+}
+
+variable "ecs_task_cpu" {
+  description = "CPU (Fargate) – ex: 256, 512, 1024"
+  type        = number
+  default     = 512
+}
+
+variable "ecs_task_memory" {
+  description = "Memória MiB (Fargate) – ex: 1024, 2048"
+  type        = number
+  default     = 1024
+}
+
+variable "logs_group_name" {
+  description = "CloudWatch Log Group para ECS"
+  type        = string
+  default     = "/ecs/airflow"
+}
+
+variable "assign_public_ip" {
+  description = "Atribui IP público às tasks (dev)"
+  type        = bool
+  default     = true
+}

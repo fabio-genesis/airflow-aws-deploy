@@ -61,7 +61,7 @@ data "aws_iam_policy_document" "airflow_s3_put_prefix" {
 
 resource "aws_iam_role_policy" "airflow_s3_upload_policy" {
   name   = "AirflowS3UploadPolicy"
-  role   = aws_iam_role.ecs_task_execution_role.id
+  role   = aws_iam_role.airflow_task_role.id
   policy = data.aws_iam_policy_document.airflow_s3_put_prefix.json
 }
 
@@ -97,7 +97,7 @@ resource "aws_security_group" "alb_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Project = "airflow-part2" }
+  tags = { Project = "airflow" }
 }
 
 ########################################
@@ -123,7 +123,7 @@ resource "aws_security_group" "ecs_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Project = "airflow-part2" }
+  tags = { Project = "airflow" }
 }
 
 ########################################
@@ -149,7 +149,7 @@ resource "aws_security_group" "rds_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Project = "airflow-part2" }
+  tags = { Project = "airflow" }
 }
 
 ########################################
@@ -200,7 +200,7 @@ resource "aws_db_subnet_group" "airflow_db_subnets" {
   subnet_ids = local.db_subnets
 
   tags = {
-    Project = "airflow-part2"
+    Project = "airflow"
   }
 }
 
@@ -324,4 +324,27 @@ resource "aws_ecr_lifecycle_policy" "airflow" {
       }
     ]
   })
+}
+
+resource "aws_iam_role" "airflow_task_role" {
+  name               = "airflow-task-role"
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_trust.json
+  tags = { Project = "airflow" }
+}
+
+# Logs do container
+resource "aws_cloudwatch_log_group" "airflow" {
+  name              = var.logs_group_name
+  retention_in_days = 7
+  tags = { Project = "airflow" }
+}
+
+# Cluster ECS
+resource "aws_ecs_cluster" "this" {
+  name = var.ecs_cluster_name
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
+  tags = { Project = "airflow" }
 }
