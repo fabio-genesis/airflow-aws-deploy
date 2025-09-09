@@ -432,3 +432,18 @@ resource "aws_ecs_service" "airflow_web" {
 
   tags = { Project = "airflow" }
 }
+
+# <<< ADICIONAR >>>
+# Ler ALB e Target Group já criados (sem gerenciar)
+data "aws_lb" "existing_alb" {
+  name = var.alb_name
+}
+
+data "aws_lb_target_group" "existing_tg" {
+  name = var.alb_target_group_name
+}
+
+# Ler repositório ECR já existente (onde você fez push)
+data "aws_ecr_repository" "airflow" {
+  name = var.ecr_repo_name
+}

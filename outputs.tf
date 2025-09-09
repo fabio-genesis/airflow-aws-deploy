@@ -51,6 +51,18 @@ output "alb_target_group_arn" {
   value = aws_lb_target_group.airflow_tg.arn
 }
 
+output "tg_arn" {
+  value = data.aws_lb_target_group.existing_tg.arn
+}
+
+output "tg_protocol_port" {
+  value = "${data.aws_lb_target_group.existing_tg.protocol}:${data.aws_lb_target_group.existing_tg.port}"
+}
+
+output "tg_target_type" {
+  value = data.aws_lb_target_group.existing_tg.target_type
+}
+
 ########################################
 # Saídas do ECR
 ########################################
