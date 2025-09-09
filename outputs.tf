@@ -50,3 +50,19 @@ output "alb_target_group_name" {
 output "alb_target_group_arn" {
   value = aws_lb_target_group.airflow_tg.arn
 }
+
+########################################
+# Saídas do ECR
+########################################
+
+output "ecr_repo_name" {
+  value = aws_ecr_repository.airflow.name
+}
+
+output "ecr_repo_url" {
+  value = aws_ecr_repository.airflow.repository_url
+}
+
+output "ecr_repo_arn" {
+  value = aws_ecr_repository.airflow.arn
+}

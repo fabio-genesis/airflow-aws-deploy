@@ -281,3 +281,47 @@ resource "aws_lb_listener" "http_80" {
     target_group_arn = aws_lb_target_group.airflow_tg.arn
   }
 }
+
+
+########################################
+# ECR: repositório privado para a imagem do Airflow
+########################################
+resource "aws_ecr_repository" "airflow" {
+  name                 = var.ecr_repo_name
+  image_tag_mutability = var.ecr_image_tag_mutability
+
+  image_scanning_configuration {
+    scan_on_push = var.ecr_scan_on_push
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+
+  tags = {
+    Project = "airflow"
+    Purpose = "airflow-image"
+  }
+}
+
+# Lifecycle policy: manter apenas as N imagens mais recentes
+resource "aws_ecr_lifecycle_policy" "airflow" {
+  repository = aws_ecr_repository.airflow.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1,
+        description  = "Keep last N images, expire older"
+        selection = {
+          tagStatus     = "any"
+          countType     = "imageCountMoreThan"
+          countNumber   = var.ecr_keep_last_images
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}

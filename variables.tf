@@ -85,3 +85,30 @@ variable "alb_health_check_path" {
   type        = string
   default     = "/"
 }
+
+########################
+# ECR
+########################
+variable "ecr_repo_name" {
+  description = "Nome do repositório ECR para a imagem do Airflow"
+  type        = string
+  default     = "airflow-image"
+}
+
+variable "ecr_image_tag_mutability" {
+  description = "MUTABLE (padrão) ou IMMUTABLE"
+  type        = string
+  default     = "MUTABLE"
+}
+
+variable "ecr_scan_on_push" {
+  description = "Habilita image scanning on push"
+  type        = bool
+  default     = true
+}
+
+variable "ecr_keep_last_images" {
+  description = "Quantidade de imagens para manter na política de lifecycle"
+  type        = number
+  default     = 10
+}
