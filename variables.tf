@@ -166,3 +166,39 @@ variable "assign_public_ip" {
   type        = bool
   default     = true
 }
+
+
+
+# CPU/Mem padrão para tasks Fargate
+variable "task_cpu" {
+  type    = number
+  default = 512
+}   # 0.5 vCPU
+
+variable "task_memory" {
+  type    = number
+  default = 1024
+}  # 1 GB
+
+# Desired counts dos serviços de fundo
+variable "scheduler_desired_count" {
+  type    = number
+  default = 1
+}
+
+variable "triggerer_desired_count" {
+  type    = number
+  default = 1
+}
+
+variable "dagproc_desired_count" {
+  type    = number
+  default = 1
+}
+
+
+variable "airflow_fernet_key" {
+  description = "Chave Fernet do Airflow (opcional em dev, recomendada em prod)."
+  type        = string
+  default     = ""
+}

@@ -443,7 +443,175 @@ data "aws_lb_target_group" "existing_tg" {
   name = var.alb_target_group_name
 }
 
-# Ler repositório ECR já existente (onde você fez push)
-data "aws_ecr_repository" "airflow" {
-  name = var.ecr_repo_name
+
+
+########################################
+# Função auxiliar para container_definitions
+########################################
+locals {
+  common_env = [
+    # Core/execução
+    { name = "AIRFLOW__CORE__EXECUTOR",                     value = "LocalExecutor" },
+    { name = "AIRFLOW__CORE__AUTH_MANAGER",                 value = "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager" },
+    { name = "AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION",  value = "true" },
+    { name = "AIRFLOW__CORE__LOAD_EXAMPLES",                value = "false" },
+    { name = "AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK",     value = "true" },
+
+    # API/UI via ALB
+    { name = "AIRFLOW__API__AUTH_BACKEND",                  value = "airflow.api.auth.backend.session" },
+    { name = "AIRFLOW__API__BASE_URL",      value = "http://${aws_lb.airflow_alb.dns_name}" },
+    { name = "AIRFLOW__LOGGING__BASE_URL",  value = "http://${aws_lb.airflow_alb.dns_name}" },
+    { name = "AIRFLOW__LOGGING__HOSTNAME_CALLABLE",         value = "socket.gethostname" },
+
+    # Banco de dados (RDS) – porta pega do próprio resource e SSL exigido
+    { name = "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN",         value = "postgresql+psycopg2://${var.db_username}:${var.db_password}@${aws_db_instance.airflow_db.address}:${aws_db_instance.airflow_db.port}/${var.db_name}?sslmode=require" },
+
+    # Região AWS (credenciais virão da IAM Role da task)
+    { name = "AWS_DEFAULT_REGION",                          value = var.aws_region },
+
+    # Opcional (bom ter): chave Fernet
+    { name = "AIRFLOW__CORE__FERNET_KEY",                   value = var.airflow_fernet_key }
+  ]
+}
+
+
+########################################
+# Task Definitions: scheduler, triggerer, dag-processor
+########################################
+resource "aws_ecs_task_definition" "scheduler" {
+  family                   = "airflow-scheduler"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = var.task_cpu
+  memory                   = var.task_memory
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "scheduler"
+      image = "${aws_ecr_repository.airflow.repository_url}:${var.ecr_image_tag}"
+      essential = true
+      command   = ["scheduler"]
+      environment = local.common_env
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-region        = var.aws_region
+          awslogs-group         = var.logs_group_name
+          awslogs-stream-prefix = "scheduler"
+        }
+      }
+    }
+  ])
+}
+
+resource "aws_ecs_task_definition" "triggerer" {
+  family                   = "airflow-triggerer"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = var.task_cpu
+  memory                   = var.task_memory
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "triggerer"
+      image = "${aws_ecr_repository.airflow.repository_url}:${var.ecr_image_tag}"
+      essential = true
+      command   = ["triggerer"]
+      environment = local.common_env
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-region        = var.aws_region
+          awslogs-group         = var.logs_group_name
+          awslogs-stream-prefix = "triggerer"
+        }
+      }
+    }
+  ])
+}
+
+resource "aws_ecs_task_definition" "dag_processor" {
+  family                   = "airflow-dag-processor"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = var.task_cpu
+  memory                   = var.task_memory
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "dag-processor"
+      image = "${aws_ecr_repository.airflow.repository_url}:${var.ecr_image_tag}"
+      essential = true
+      command   = ["dag-processor"]
+      environment = local.common_env
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-region        = var.aws_region
+          awslogs-group         = var.logs_group_name
+          awslogs-stream-prefix = "dagproc"
+        }
+      }
+    }
+  ])
+}
+
+########################################
+# Services: scheduler, triggerer, dag-processor
+########################################
+resource "aws_ecs_service" "scheduler" {
+  name            = "airflow-scheduler"
+  cluster         = aws_ecs_cluster.this.id
+  task_definition = aws_ecs_task_definition.scheduler.arn
+  desired_count   = var.scheduler_desired_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets         = data.aws_subnets.default.ids
+    security_groups = [aws_security_group.ecs_sg.id]
+    assign_public_ip = true
+  }
+
+  lifecycle {
+    ignore_changes = [task_definition] # permite atualizar revisões sem recriar service via TF
+  }
+}
+
+resource "aws_ecs_service" "triggerer" {
+  name            = "airflow-triggerer"
+  cluster         = aws_ecs_cluster.this.id
+  task_definition = aws_ecs_task_definition.triggerer.arn
+  desired_count   = var.triggerer_desired_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets         = data.aws_subnets.default.ids
+    security_groups = [aws_security_group.ecs_sg.id]
+    assign_public_ip = true
+  }
+
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+}
+
+resource "aws_ecs_service" "dag_processor" {
+  name            = "airflow-dag-processor"
+  cluster         = aws_ecs_cluster.this.id
+  task_definition = aws_ecs_task_definition.dag_processor.arn
+  desired_count   = var.dagproc_desired_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets         = data.aws_subnets.default.ids
+    security_groups = [aws_security_group.ecs_sg.id]
+    assign_public_ip = true
+  }
+
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }

@@ -103,3 +103,11 @@ output "logs_group" {
   description = "CloudWatch Log Group"
   value       = aws_cloudwatch_log_group.airflow.name
 }
+
+output "scheduler_taskdef_arn"  { value = aws_ecs_task_definition.scheduler.arn }
+output "triggerer_taskdef_arn"  { value = aws_ecs_task_definition.triggerer.arn }
+output "dagproc_taskdef_arn"    { value = aws_ecs_task_definition.dag_processor.arn }
+
+output "scheduler_service_name" { value = aws_ecs_service.scheduler.name }
+output "triggerer_service_name" { value = aws_ecs_service.triggerer.name }
+output "dagproc_service_name"   { value = aws_ecs_service.dag_processor.name }
