@@ -202,3 +202,8 @@ variable "airflow_fernet_key" {
   type        = string
   default     = ""
 }
+
+variable "airflow_webserver_secret_key" {
+  description = "Secret key usada pelo webserver (mesma em todos os containers)"
+  type        = string
+}

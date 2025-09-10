@@ -383,9 +383,18 @@ resource "aws_ecs_task_definition" "airflow_web" {
         { name = "AIRFLOW__LOGGING__BASE_URL",                 value = "http://${aws_lb.airflow_alb.dns_name}" },
         {
           name  = "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN",
-          value = "postgresql+psycopg2://${var.db_username}:${var.db_password}@${aws_db_instance.airflow_db.address}:${aws_db_instance.airflow_db.port}/${var.db_name}"
-        }
+          value = "postgresql+psycopg2://${var.db_username}:${var.db_password}@${aws_db_instance.airflow_db.address}:${aws_db_instance.airflow_db.port}/${var.db_name}?sslmode=require"
+        },
+
+        { name = "AIRFLOW__CORE__FERNET_KEY",                  value = var.airflow_fernet_key },
+        { name = "AIRFLOW__WEBSERVER__SECRET_KEY",             value = var.airflow_webserver_secret_key },
+        { name = "AIRFLOW__API__AUTH_BACKEND", value = "airflow.api.auth.backend.session" },
+        { name = "AIRFLOW__CORE__EXECUTION_API_SERVER_URL", value = "http://${aws_lb.airflow_alb.dns_name}/execution/" },
+        { name = "AIRFLOW__CORE__FERNET_KEY", value = var.airflow_fernet_key },
+
+
       ]
+
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -433,6 +442,7 @@ resource "aws_ecs_service" "airflow_web" {
   tags = { Project = "airflow" }
 }
 
+
 # <<< ADICIONAR >>>
 # Ler ALB e Target Group já criados (sem gerenciar)
 data "aws_lb" "existing_alb" {
@@ -444,35 +454,38 @@ data "aws_lb_target_group" "existing_tg" {
 }
 
 
-
 ########################################
 # Função auxiliar para container_definitions
 ########################################
 locals {
   common_env = [
-    # Core/execução
-    { name = "AIRFLOW__CORE__EXECUTOR",                     value = "LocalExecutor" },
-    { name = "AIRFLOW__CORE__AUTH_MANAGER",                 value = "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager" },
-    { name = "AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION",  value = "true" },
-    { name = "AIRFLOW__CORE__LOAD_EXAMPLES",                value = "false" },
-    { name = "AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK",     value = "true" },
+    # Core
+    { name = "AIRFLOW__CORE__EXECUTOR",                    value = "LocalExecutor" },
+    { name = "AIRFLOW__CORE__AUTH_MANAGER",                value = "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager" },
+    { name = "AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION", value = "true" },
+    { name = "AIRFLOW__CORE__LOAD_EXAMPLES",               value = "false" },
+    { name = "AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK",    value = "true" },
 
-    # API/UI via ALB
-    { name = "AIRFLOW__API__AUTH_BACKEND",                  value = "airflow.api.auth.backend.session" },
-    { name = "AIRFLOW__API__BASE_URL",      value = "http://${aws_lb.airflow_alb.dns_name}" },
-    { name = "AIRFLOW__LOGGING__BASE_URL",  value = "http://${aws_lb.airflow_alb.dns_name}" },
-    { name = "AIRFLOW__LOGGING__HOSTNAME_CALLABLE",         value = "socket.gethostname" },
+    # API/UI (o scheduler usa isto para falar com o web)
+    { name = "AIRFLOW__API__AUTH_BACKEND",                 value = "airflow.api.auth.backend.session" },
+    { name = "AIRFLOW__API__BASE_URL",                     value = "http://${aws_lb.airflow_alb.dns_name}" },
+    { name = "AIRFLOW__CORE__EXECUTION_API_SERVER_URL",    value = "http://${aws_lb.airflow_alb.dns_name}/execution/" },
+    { name = "AIRFLOW__LOGGING__BASE_URL",                 value = "http://${aws_lb.airflow_alb.dns_name}" },
+    { name = "AIRFLOW__LOGGING__HOSTNAME_CALLABLE",        value = "socket.gethostname" },
 
-    # Banco de dados (RDS) – porta pega do próprio resource e SSL exigido
-    { name = "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN",         value = "postgresql+psycopg2://${var.db_username}:${var.db_password}@${aws_db_instance.airflow_db.address}:${aws_db_instance.airflow_db.port}/${var.db_name}?sslmode=require" },
+    # Banco (RDS) – com SSL
+    { name = "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN",        value = "postgresql+psycopg2://${var.db_username}:${var.db_password}@${aws_db_instance.airflow_db.address}:${aws_db_instance.airflow_db.port}/${var.db_name}?sslmode=require" },
 
-    # Região AWS (credenciais virão da IAM Role da task)
-    { name = "AWS_DEFAULT_REGION",                          value = var.aws_region },
+    # Região AWS
+    { name = "AWS_DEFAULT_REGION",                         value = var.aws_region },
 
-    # Opcional (bom ter): chave Fernet
-    { name = "AIRFLOW__CORE__FERNET_KEY",                   value = var.airflow_fernet_key }
+    # Segredos (iguais em TODOS os containers)
+    { name = "AIRFLOW__CORE__FERNET_KEY",                  value = var.airflow_fernet_key },
+    { name = "AIRFLOW__WEBSERVER__SECRET_KEY",             value = var.airflow_webserver_secret_key },
   ]
 }
+
+
 
 
 ########################################
