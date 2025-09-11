@@ -99,6 +99,35 @@ resource "aws_iam_role_policy" "airflow_s3_upload_policy" {
   policy = data.aws_iam_policy_document.airflow_s3_access.json
 }
 
+# Policy para logs remotos do Airflow (S3)
+resource "aws_iam_role_policy" "airflow_logs_policy" {
+  name = "AirflowLogsPolicy"
+  role = aws_iam_role.airflow_task_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid    = "ListBucketLogsPrefix",
+        Effect = "Allow",
+        Action = ["s3:ListBucket"],
+        Resource = "arn:aws:s3:::${aws_s3_bucket.airflow_output.bucket}",
+        Condition = {
+          StringLike = {
+            "s3:prefix" = "airflow-logs/*"
+          }
+        }
+      },
+      {
+        Sid    = "ReadWriteLogsObjects",
+        Effect = "Allow",
+        Action = ["s3:GetObject","s3:PutObject"],
+        Resource = "arn:aws:s3:::${aws_s3_bucket.airflow_output.bucket}/airflow-logs/*"
+      }
+    ]
+  })
+}
+
 
 ########################################
 # Descobrir VPC default
@@ -426,6 +455,11 @@ resource "aws_ecs_task_definition" "airflow_web" {
         { name = "AIRFLOW__API__AUTH_BACKEND", value = "airflow.api.auth.backend.session" },
         { name = "AIRFLOW__CORE__EXECUTION_API_SERVER_URL", value = "http://${aws_lb.airflow_alb.dns_name}/execution/" },
         { name = "AIRFLOW__CORE__FERNET_KEY", value = var.airflow_fernet_key },
+
+        { name = "AIRFLOW__LOGGING__REMOTE_LOGGING",         value = "true" },
+        { name = "AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER", value = "s3://${var.s3_bucket_name}/airflow-logs/" },
+        { name = "AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID",     value = "aws_default" },
+
 
 
       ]
