@@ -59,11 +59,46 @@ data "aws_iam_policy_document" "airflow_s3_put_prefix" {
   }
 }
 
-resource "aws_iam_role_policy" "airflow_s3_upload_policy" {
-  name   = "AirflowS3UploadPolicy"
-  role   = aws_iam_role.airflow_task_role.id
-  policy = data.aws_iam_policy_document.airflow_s3_put_prefix.json
+# Prefixos
+variable "logs_prefix" {
+  description = "Prefixo onde os logs do Airflow serão gravados no S3"
+  type        = string
+  default     = "airflow-logs/"
 }
+
+data "aws_iam_policy_document" "airflow_s3_access" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:PutObject", "s3:GetObject"
+    ]
+    resources = [
+      "arn:aws:s3:::${aws_s3_bucket.airflow_output.bucket}/${var.logs_prefix}*",
+      "arn:aws:s3:::${aws_s3_bucket.airflow_output.bucket}/${var.s3_upload_prefix}*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = ["s3:ListBucket"]
+    resources = ["arn:aws:s3:::${aws_s3_bucket.airflow_output.bucket}"]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = [
+        "${var.logs_prefix}*",
+        "${var.s3_upload_prefix}*"
+      ]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "airflow_s3_upload_policy" {
+  name   = "AirflowS3AccessPolicy"
+  role   = aws_iam_role.airflow_task_role.id
+  policy = data.aws_iam_policy_document.airflow_s3_access.json
+}
+
 
 ########################################
 # Descobrir VPC default
@@ -472,6 +507,11 @@ locals {
     { name = "AIRFLOW__CORE__EXECUTION_API_SERVER_URL",    value = "http://${aws_lb.airflow_alb.dns_name}/execution/" },
     { name = "AIRFLOW__LOGGING__BASE_URL",                 value = "http://${aws_lb.airflow_alb.dns_name}" },
     { name = "AIRFLOW__LOGGING__HOSTNAME_CALLABLE",        value = "socket.gethostname" },
+    
+    # Remote logging em S3
+    { name = "AIRFLOW__LOGGING__REMOTE_LOGGING",            value = "true" },
+    { name = "AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER",    value = "s3://${aws_s3_bucket.airflow_output.bucket}/${var.logs_prefix}" },
+    { name = "AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID",        value = "aws_default" },
 
     # Banco (RDS) – com SSL
     { name = "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN",        value = "postgresql+psycopg2://${var.db_username}:${var.db_password}@${aws_db_instance.airflow_db.address}:${aws_db_instance.airflow_db.port}/${var.db_name}?sslmode=require" },
@@ -498,6 +538,7 @@ resource "aws_ecs_task_definition" "scheduler" {
   cpu                      = var.task_cpu
   memory                   = var.task_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn      = aws_iam_role.airflow_task_role.arn
 
   container_definitions = jsonencode([
     {
@@ -525,6 +566,7 @@ resource "aws_ecs_task_definition" "triggerer" {
   cpu                      = var.task_cpu
   memory                   = var.task_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn      = aws_iam_role.airflow_task_role.arn
 
   container_definitions = jsonencode([
     {
@@ -552,6 +594,7 @@ resource "aws_ecs_task_definition" "dag_processor" {
   cpu                      = var.task_cpu
   memory                   = var.task_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn      = aws_iam_role.airflow_task_role.arn
 
   container_definitions = jsonencode([
     {
