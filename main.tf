@@ -559,7 +559,11 @@ locals {
 
     { name = "AIRFLOW__CORE__STORE_SERIALIZED_DAGS",           value = "true" },
     { name = "AIRFLOW__CORE__MIN_SERIALIZED_DAG_UPDATE_INTERVAL", value = "30" },
-    { name = "AIRFLOW__CORE__MIN_SERIALIZED_DAG_FETCH_INTERVAL",  value = "10" }
+    { name = "AIRFLOW__CORE__MIN_SERIALIZED_DAG_FETCH_INTERVAL",  value = "10" },
+
+    { name = "_PIP_ADDITIONAL_REQUIREMENTS", value = "apache-airflow-providers-fab==2.0.2 pandas==2.1.1 boto3==1.38.21" }
+
+
 
   ]
 }
