@@ -180,6 +180,15 @@ resource "aws_security_group" "ecs_sg" {
     security_groups = [aws_security_group.alb_sg.id] # origem = SG do ALB
   }
 
+    // Habilita served logs (streaming) entre services ECS na porta 8793
+  ingress {
+    description = "Airflow served logs between ECS tasks"
+    from_port   = 8793
+    to_port     = 8793
+    protocol    = "tcp"
+    self        = true              // << substituir a referencia ao proprio SG por self=true
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -437,35 +446,7 @@ resource "aws_ecs_task_definition" "airflow_web" {
           appProtocol   = "http"
         }
       ]
-      environment = [
-        { name = "AIRFLOW__CORE__EXECUTOR",                    value = "LocalExecutor" },
-        { name = "AIRFLOW__CORE__AUTH_MANAGER",                value = "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager" },
-        { name = "AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION", value = "true" },
-        { name = "AIRFLOW__CORE__LOAD_EXAMPLES",               value = "false" },
-        { name = "AIRFLOW__LOGGING__HOSTNAME_CALLABLE",        value = "socket.gethostname" },
-        { name = "AIRFLOW__API__BASE_URL",                     value = "http://${aws_lb.airflow_alb.dns_name}" },
-        { name = "AIRFLOW__LOGGING__BASE_URL",                 value = "http://${aws_lb.airflow_alb.dns_name}" },
-        {
-          name  = "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN",
-          value = "postgresql+psycopg2://${var.db_username}:${var.db_password}@${aws_db_instance.airflow_db.address}:${aws_db_instance.airflow_db.port}/${var.db_name}?sslmode=require"
-        },
-
-        { name = "AIRFLOW__CORE__FERNET_KEY",                  value = var.airflow_fernet_key },
-        { name = "AIRFLOW__WEBSERVER__SECRET_KEY",             value = var.airflow_webserver_secret_key },
-        { name = "AIRFLOW__API__AUTH_BACKEND", value = "airflow.api.auth.backend.session" },
-        { name = "AIRFLOW__CORE__EXECUTION_API_SERVER_URL", value = "http://${aws_lb.airflow_alb.dns_name}/execution/" },
-        { name = "AIRFLOW__CORE__FERNET_KEY", value = var.airflow_fernet_key },
-
-        { name = "AIRFLOW__LOGGING__REMOTE_LOGGING",         value = "true" },
-        { name = "AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER", value = "s3://${var.s3_bucket_name}/airflow-logs/" },
-        { name = "AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID",     value = "aws_default" },
-
-        { name = "AIRFLOW__LOGGING__WORKER_LOG_SERVER_PORT",  value = "0" },
-        { name = "AIRFLOW__LOGGING__TRIGGER_LOG_SERVER_PORT", value = "0" }
-
-
-
-      ]
+      environment = local.common_env
 
       logConfiguration = {
         logDriver = "awslogs"
@@ -543,11 +524,11 @@ locals {
     { name = "AIRFLOW__API__BASE_URL",                     value = "http://${aws_lb.airflow_alb.dns_name}" },
     { name = "AIRFLOW__CORE__EXECUTION_API_SERVER_URL",    value = "http://${aws_lb.airflow_alb.dns_name}/execution/" },
     { name = "AIRFLOW__LOGGING__BASE_URL",                 value = "http://${aws_lb.airflow_alb.dns_name}" },
-    { name = "AIRFLOW__LOGGING__HOSTNAME_CALLABLE",        value = "socket.gethostname" },
+    { name = "AIRFLOW__LOGGING__HOSTNAME_CALLABLE",        value = "airflow.utils.net.get_host_ip_address" },
     
     # Remote logging em S3
     { name = "AIRFLOW__LOGGING__REMOTE_LOGGING",            value = "true" },
-    { name = "AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER",    value = "s3://${aws_s3_bucket.airflow_output.bucket}/${var.logs_prefix}" },
+    { name = "AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER", value = "s3://${var.s3_bucket_name}/airflow-logs/" },
     { name = "AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID",        value = "aws_default" },
 
     # Banco (RDS) – com SSL
@@ -565,12 +546,20 @@ locals {
     { name = "AIRFLOW__CORE__MIN_SERIALIZED_DAG_FETCH_INTERVAL",  value = "10" },
     { name = "AIRFLOW__CORE__STORE_DAG_CODE",                   value = "false" },
 
-    { name = "_PIP_ADDITIONAL_REQUIREMENTS", value = "apache-airflow-providers-fab==2.0.2 pandas==2.1.1 boto3==1.38.21" },
-    { name = "AIRFLOW__LOGGING__WORKER_LOG_SERVER_PORT",  value = "0" },
+    { name = "_PIP_ADDITIONAL_REQUIREMENTS", value = "apache-airflow-providers-amazon apache-airflow-providers-fab==2.0.2 pandas==2.1.1 boto3==1.38.21" },
+    { name = "AIRFLOW__LOGGING__WORKER_LOG_SERVER_PORT",  value = "8793" },
     { name = "AIRFLOW__LOGGING__TRIGGER_LOG_SERVER_PORT", value = "0" },
 
     { name = "AIRFLOW__EXECUTION_API__JWT_SECRET",      value = var.execution_api_jwt_secret },
     { name = "AIRFLOW__EXECUTION_API__JWT_ALGORITHM",   value = "HS512" },
+
+    { name = "AIRFLOW_CONN_AWS_DEFAULT", value = "aws://?region_name=${var.aws_region}" },
+
+    { name = "AIRFLOW__CORE__HOSTNAME_CALLABLE",           value = "airflow.utils.net.get_host_ip_address" },
+
+        // Execution API habilitado e com mesmo segredo em todos os services
+    { name = "AIRFLOW__EXECUTION_API__ENABLED",            value = "true" }
+
 
 
 
@@ -598,6 +587,10 @@ resource "aws_ecs_task_definition" "scheduler" {
       image = "${aws_ecr_repository.airflow.repository_url}:${var.ecr_image_tag}"
       essential = true
       command   = ["scheduler"]
+      // Expõe 8793 para served logs
+      portMappings = [
+        { containerPort = 8793, hostPort = 8793, protocol = "tcp" }
+      ]
       environment = local.common_env
       logConfiguration = {
         logDriver = "awslogs"
