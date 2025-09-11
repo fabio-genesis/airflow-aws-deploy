@@ -207,3 +207,10 @@ variable "airflow_webserver_secret_key" {
   description = "Secret key usada pelo webserver (mesma em todos os containers)"
   type        = string
 }
+
+variable "execution_api_jwt_secret" {
+  description = "Shared JWT secret used by Airflow Execution API"
+  type        = string
+  sensitive   = true
+}
+

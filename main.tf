@@ -460,6 +460,9 @@ resource "aws_ecs_task_definition" "airflow_web" {
         { name = "AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER", value = "s3://${var.s3_bucket_name}/airflow-logs/" },
         { name = "AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID",     value = "aws_default" },
 
+        { name = "AIRFLOW__LOGGING__WORKER_LOG_SERVER_PORT",  value = "0" },
+        { name = "AIRFLOW__LOGGING__TRIGGER_LOG_SERVER_PORT", value = "0" }
+
 
 
       ]
@@ -560,8 +563,14 @@ locals {
     { name = "AIRFLOW__CORE__STORE_SERIALIZED_DAGS",           value = "true" },
     { name = "AIRFLOW__CORE__MIN_SERIALIZED_DAG_UPDATE_INTERVAL", value = "30" },
     { name = "AIRFLOW__CORE__MIN_SERIALIZED_DAG_FETCH_INTERVAL",  value = "10" },
+    { name = "AIRFLOW__CORE__STORE_DAG_CODE",                   value = "false" },
 
-    { name = "_PIP_ADDITIONAL_REQUIREMENTS", value = "apache-airflow-providers-fab==2.0.2 pandas==2.1.1 boto3==1.38.21" }
+    { name = "_PIP_ADDITIONAL_REQUIREMENTS", value = "apache-airflow-providers-fab==2.0.2 pandas==2.1.1 boto3==1.38.21" },
+    { name = "AIRFLOW__LOGGING__WORKER_LOG_SERVER_PORT",  value = "0" },
+    { name = "AIRFLOW__LOGGING__TRIGGER_LOG_SERVER_PORT", value = "0" },
+
+    { name = "AIRFLOW__EXECUTION_API__JWT_SECRET",      value = var.execution_api_jwt_secret },
+    { name = "AIRFLOW__EXECUTION_API__JWT_ALGORITHM",   value = "HS512" },
 
 
 
@@ -674,9 +683,6 @@ resource "aws_ecs_service" "scheduler" {
     assign_public_ip = true
   }
 
-  lifecycle {
-    ignore_changes = [task_definition] # permite atualizar revisões sem recriar service via TF
-  }
 }
 
 resource "aws_ecs_service" "triggerer" {
@@ -692,9 +698,7 @@ resource "aws_ecs_service" "triggerer" {
     assign_public_ip = true
   }
 
-  lifecycle {
-    ignore_changes = [task_definition]
-  }
+
 }
 
 resource "aws_ecs_service" "dag_processor" {
@@ -710,7 +714,4 @@ resource "aws_ecs_service" "dag_processor" {
     assign_public_ip = true
   }
 
-  lifecycle {
-    ignore_changes = [task_definition]
-  }
 }
