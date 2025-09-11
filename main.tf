@@ -556,6 +556,11 @@ locals {
     # Segredos (iguais em TODOS os containers)
     { name = "AIRFLOW__CORE__FERNET_KEY",                  value = var.airflow_fernet_key },
     { name = "AIRFLOW__WEBSERVER__SECRET_KEY",             value = var.airflow_webserver_secret_key },
+
+    { name = "AIRFLOW__CORE__STORE_SERIALIZED_DAGS",           value = "true" },
+    { name = "AIRFLOW__CORE__MIN_SERIALIZED_DAG_UPDATE_INTERVAL", value = "30" },
+    { name = "AIRFLOW__CORE__MIN_SERIALIZED_DAG_FETCH_INTERVAL",  value = "10" }
+
   ]
 }
 
