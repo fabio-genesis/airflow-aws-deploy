@@ -181,13 +181,13 @@ resource "aws_security_group" "ecs_sg" {
   }
 
     // Habilita served logs (streaming) entre services ECS na porta 8793
-  ingress {
-    description = "Airflow served logs between ECS tasks"
-    from_port   = 8793
-    to_port     = 8793
-    protocol    = "tcp"
-    self        = true              // << substituir a referencia ao proprio SG por self=true
-  }
+    // ingress {
+    //   description = "Airflow served logs between ECS tasks"
+    //   from_port   = 8793
+    //   to_port     = 8793
+    //   protocol    = "tcp"
+    //   self        = true
+    // }
 
   egress {
     from_port   = 0
@@ -437,7 +437,8 @@ resource "aws_ecs_task_definition" "airflow_web" {
       name       = var.container_name
       image      = "${aws_ecr_repository.airflow.repository_url}:${var.ecr_image_tag}"
       essential  = true
-      command    = ["api-server"]
+      // Migração idempotente + inicia o webserver
+      command    = ["bash","-lc","airflow db migrate && exec airflow webserver"]
       portMappings = [
         {
           containerPort = var.container_port
@@ -474,6 +475,12 @@ resource "aws_ecs_service" "airflow_web" {
   task_definition = aws_ecs_task_definition.airflow_web.arn
   desired_count   = 1
   launch_type     = "FARGATE"
+  wait_for_steady_state = true
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = false
+  }
 
   network_configuration {
     subnets          = data.aws_subnets.default.ids
@@ -512,6 +519,8 @@ data "aws_lb_target_group" "existing_tg" {
 ########################################
 locals {
   common_env = [
+
+    
     # Core
     { name = "AIRFLOW__CORE__EXECUTOR",                    value = "LocalExecutor" },
     { name = "AIRFLOW__CORE__AUTH_MANAGER",                value = "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager" },
@@ -524,7 +533,8 @@ locals {
     { name = "AIRFLOW__API__BASE_URL",                     value = "http://${aws_lb.airflow_alb.dns_name}" },
     { name = "AIRFLOW__CORE__EXECUTION_API_SERVER_URL",    value = "http://${aws_lb.airflow_alb.dns_name}/execution/" },
     { name = "AIRFLOW__LOGGING__BASE_URL",                 value = "http://${aws_lb.airflow_alb.dns_name}" },
-    { name = "AIRFLOW__LOGGING__HOSTNAME_CALLABLE",        value = "airflow.utils.net.get_host_ip_address" },
+    { name = "AIRFLOW__WEBSERVER__BASE_URL",                value = "http://${aws_lb.airflow_alb.dns_name}" },
+
     
     # Remote logging em S3
     { name = "AIRFLOW__LOGGING__REMOTE_LOGGING",            value = "true" },
@@ -547,7 +557,7 @@ locals {
     { name = "AIRFLOW__CORE__STORE_DAG_CODE",                   value = "false" },
 
     { name = "_PIP_ADDITIONAL_REQUIREMENTS", value = "apache-airflow-providers-amazon apache-airflow-providers-fab==2.0.2 pandas==2.1.1 boto3==1.38.21" },
-    { name = "AIRFLOW__LOGGING__WORKER_LOG_SERVER_PORT",  value = "8793" },
+    { name = "AIRFLOW__LOGGING__WORKER_LOG_SERVER_PORT",  value = "0" },
     { name = "AIRFLOW__LOGGING__TRIGGER_LOG_SERVER_PORT", value = "0" },
 
     { name = "AIRFLOW__EXECUTION_API__JWT_SECRET",      value = var.execution_api_jwt_secret },
@@ -555,7 +565,7 @@ locals {
 
     { name = "AIRFLOW_CONN_AWS_DEFAULT", value = "aws://?region_name=${var.aws_region}" },
 
-    { name = "AIRFLOW__CORE__HOSTNAME_CALLABLE",           value = "airflow.utils.net.get_host_ip_address" },
+    { name = "AIRFLOW__CORE__HOSTNAME_CALLABLE",           value = "socket.gethostname" },
 
         // Execution API habilitado e com mesmo segredo em todos os services
     { name = "AIRFLOW__EXECUTION_API__ENABLED",            value = "true" }
@@ -586,11 +596,11 @@ resource "aws_ecs_task_definition" "scheduler" {
       name      = "scheduler"
       image = "${aws_ecr_repository.airflow.repository_url}:${var.ecr_image_tag}"
       essential = true
-      command   = ["scheduler"]
+      command    = ["bash","-lc","airflow db migrate && exec airflow scheduler"]
       // Expõe 8793 para served logs
-      portMappings = [
-        { containerPort = 8793, hostPort = 8793, protocol = "tcp" }
-      ]
+      //portMappings = [
+      //  { containerPort = 8793, hostPort = 8793, protocol = "tcp" }
+      //]
       environment = local.common_env
       logConfiguration = {
         logDriver = "awslogs"
@@ -646,7 +656,7 @@ resource "aws_ecs_task_definition" "dag_processor" {
       name      = "dag-processor"
       image = "${aws_ecr_repository.airflow.repository_url}:${var.ecr_image_tag}"
       essential = true
-      command   = ["dag-processor"]
+      command    = ["bash","-lc","airflow db migrate && exec airflow dag-processor"]
       environment = local.common_env
       logConfiguration = {
         logDriver = "awslogs"
@@ -669,6 +679,12 @@ resource "aws_ecs_service" "scheduler" {
   task_definition = aws_ecs_task_definition.scheduler.arn
   desired_count   = var.scheduler_desired_count
   launch_type     = "FARGATE"
+  wait_for_steady_state = true
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = false
+  }
 
   network_configuration {
     subnets         = data.aws_subnets.default.ids
@@ -684,6 +700,12 @@ resource "aws_ecs_service" "triggerer" {
   task_definition = aws_ecs_task_definition.triggerer.arn
   desired_count   = var.triggerer_desired_count
   launch_type     = "FARGATE"
+  wait_for_steady_state = true
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = false
+  }
 
   network_configuration {
     subnets         = data.aws_subnets.default.ids
@@ -700,6 +722,12 @@ resource "aws_ecs_service" "dag_processor" {
   task_definition = aws_ecs_task_definition.dag_processor.arn
   desired_count   = var.dagproc_desired_count
   launch_type     = "FARGATE"
+  wait_for_steady_state = true
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = false
+  }
 
   network_configuration {
     subnets         = data.aws_subnets.default.ids
@@ -707,4 +735,10 @@ resource "aws_ecs_service" "dag_processor" {
     assign_public_ip = true
   }
 
+}
+
+resource "aws_s3_object" "airflow_logs_placeholder" {
+  bucket  = aws_s3_bucket.airflow_output.id
+  key     = "${var.logs_prefix}.keep"
+  content = ""
 }

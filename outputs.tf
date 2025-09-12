@@ -111,3 +111,8 @@ output "dagproc_taskdef_arn"    { value = aws_ecs_task_definition.dag_processor.
 output "scheduler_service_name" { value = aws_ecs_service.scheduler.name }
 output "triggerer_service_name" { value = aws_ecs_service.triggerer.name }
 output "dagproc_service_name"   { value = aws_ecs_service.dag_processor.name }
+
+output "default_subnet_ids" {
+  description = "Subnets da VPC default"
+  value       = data.aws_subnets.default.ids
+}

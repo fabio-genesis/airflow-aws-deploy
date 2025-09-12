@@ -83,7 +83,7 @@ variable "alb_target_group_name" {
 variable "alb_health_check_path" {
   description = "Path do health check do ALB -> TG"
   type        = string
-  default     = "/"
+  default     = "/health"
 }
 
 ########################
