@@ -95,14 +95,14 @@ data "aws_iam_policy_document" "airflow_s3_access" {
 
 resource "aws_iam_role_policy" "airflow_s3_upload_policy" {
   name   = "AirflowS3AccessPolicy"
-  role   = aws_iam_role.airflow_task_role.id
+  role   = aws_iam_role.ecs_task_execution_role.id
   policy = data.aws_iam_policy_document.airflow_s3_access.json
 }
 
 # Policy para logs remotos do Airflow (S3)
 resource "aws_iam_role_policy" "airflow_logs_policy" {
   name = "AirflowLogsPolicy"
-  role = aws_iam_role.airflow_task_role.id
+  role = aws_iam_role.ecs_task_execution_role.id
 
   policy = jsonencode({
     Version = "2012-10-17",
@@ -413,6 +413,17 @@ resource "aws_cloudwatch_log_group" "airflow" {
 }
 
 # Cluster ECS
+resource "aws_ecs_cluster_capacity_providers" "this" {
+  cluster_name       = aws_ecs_cluster.this.name
+  capacity_providers = ["FARGATE", "FARGATE_SPOT"]
+
+  default_capacity_provider_strategy {
+    capacity_provider = "FARGATE"
+    base              = 0
+    weight            = 1
+  }
+}
+
 resource "aws_ecs_cluster" "this" {
   name = var.ecs_cluster_name
   setting {
@@ -430,7 +441,7 @@ resource "aws_ecs_task_definition" "airflow_web" {
   memory                   = var.ecs_task_memory
 
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn            = aws_iam_role.airflow_task_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_execution_role.arn
 
   container_definitions = jsonencode([
     {
@@ -589,7 +600,7 @@ resource "aws_ecs_task_definition" "scheduler" {
   cpu                      = var.task_cpu
   memory                   = var.task_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn      = aws_iam_role.airflow_task_role.arn
+  task_role_arn      = aws_iam_role.ecs_task_execution_role.arn
 
   container_definitions = jsonencode([
     {
@@ -621,7 +632,7 @@ resource "aws_ecs_task_definition" "triggerer" {
   cpu                      = var.task_cpu
   memory                   = var.task_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn      = aws_iam_role.airflow_task_role.arn
+  task_role_arn      = aws_iam_role.ecs_task_execution_role.arn
 
   container_definitions = jsonencode([
     {
@@ -649,7 +660,7 @@ resource "aws_ecs_task_definition" "dag_processor" {
   cpu                      = var.task_cpu
   memory                   = var.task_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn      = aws_iam_role.airflow_task_role.arn
+  task_role_arn      = aws_iam_role.ecs_task_execution_role.arn
 
   container_definitions = jsonencode([
     {
