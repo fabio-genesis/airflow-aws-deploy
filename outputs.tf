@@ -31,6 +31,21 @@ output "rds_port" {
   value = aws_db_instance.airflow_db.port
 }
 
+output "airflow_sqlalchemy_conn" {
+  description = "SQLAlchemy conn string do RDS (sensível)"
+  value       = "postgresql+psycopg2://${var.db_username}:${var.db_password}@${aws_db_instance.airflow_db.address}:${aws_db_instance.airflow_db.port}/${var.db_name}?sslmode=require"
+  sensitive   = true
+}
+
+output "airflow_api_base_url" {
+  description = "Base URL do Airflow API via ALB"
+  value       = "http://${aws_lb.airflow_alb.dns_name}"
+}
+
+output "airflow_logging_base_url" {
+  description = "Base URL de logging via ALB"
+  value       = "http://${aws_lb.airflow_alb.dns_name}"
+}
 
 ########################################
 # Saídas do ALB/TG
