@@ -97,7 +97,7 @@ resource "aws_security_group" "alb_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Project = "airflow-part2" }
+  tags = { Project = "airflow" }
 }
 
 ########################################
@@ -123,7 +123,7 @@ resource "aws_security_group" "ecs_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Project = "airflow-part2" }
+  tags = { Project = "airflow" }
 }
 
 ########################################
@@ -149,7 +149,7 @@ resource "aws_security_group" "rds_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Project = "airflow-part2" }
+  tags = { Project = "airflow" }
 }
 
 ########################################
@@ -200,7 +200,7 @@ resource "aws_db_subnet_group" "airflow_db_subnets" {
   subnet_ids = local.db_subnets
 
   tags = {
-    Project = "airflow-part2"
+    Project = "airflow"
   }
 }
 
@@ -230,3 +230,55 @@ resource "aws_db_instance" "airflow_db" {
     Project = "airflow"
   }
 }
+
+########################################
+# Application Load Balancer (ALB)
+########################################
+resource "aws_lb" "airflow_alb" {
+  name               = var.alb_name
+  load_balancer_type = "application"
+  internal           = false
+  security_groups    = [aws_security_group.alb_sg.id]
+  subnets            = data.aws_subnets.default.ids
+
+  tags = { Project = "airflow" }
+}
+
+########################################
+# Target Group do Airflow (tipo ip, HTTP:8080)
+########################################
+resource "aws_lb_target_group" "airflow_tg" {
+  name        = var.alb_target_group_name
+  port        = 8080
+  protocol    = "HTTP"
+  target_type = "ip"                         # Fargate/ECS usa 'ip'
+  vpc_id      = data.aws_vpc.default.id
+
+  health_check {
+    enabled             = true
+    protocol            = "HTTP"
+    path                = var.alb_health_check_path
+    matcher             = "200-399"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+
+  tags = { Project = "airflow" }
+}
+
+########################################
+# Listener :80 (HTTP) -> encaminha para o TG
+########################################
+resource "aws_lb_listener" "http_80" {
+  load_balancer_arn = aws_lb.airflow_alb.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.airflow_tg.arn
+  }
+}
+

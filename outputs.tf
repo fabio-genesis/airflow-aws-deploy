@@ -30,3 +30,36 @@ output "rds_endpoint" {
 output "rds_port" {
   value = aws_db_instance.airflow_db.port
 }
+
+
+########################################
+# Saídas do ALB/TG
+########################################
+output "alb_dns_name" {
+  description = "DNS público do ALB para acessar a UI do Airflow"
+  value       = aws_lb.airflow_alb.dns_name
+}
+
+output "alb_arn" {
+  value = aws_lb.airflow_alb.arn
+}
+
+output "alb_target_group_name" {
+  value = aws_lb_target_group.airflow_tg.name
+}
+
+output "alb_target_group_arn" {
+  value = aws_lb_target_group.airflow_tg.arn
+}
+
+output "tg_arn" {
+  value = aws_lb_target_group.airflow_tg.arn
+}
+
+output "tg_protocol_port" {
+  value = "${aws_lb_target_group.airflow_tg.protocol}:${aws_lb_target_group.airflow_tg.port}"
+}
+
+output "tg_target_type" {
+  value = aws_lb_target_group.airflow_tg.target_type
+}

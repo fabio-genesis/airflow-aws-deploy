@@ -64,3 +64,24 @@ variable "db_name" {
   type        = string
   default     = "airflow"
 }
+
+########################################
+# ALB / Target Group
+########################################
+variable "alb_name" {
+  description = "Nome do Application Load Balancer"
+  type        = string
+  default     = "airflow-alb"
+}
+
+variable "alb_target_group_name" {
+  description = "Nome do Target Group HTTP:8080 (tipo ip)"
+  type        = string
+  default     = "airflow-tg"
+}
+
+variable "alb_health_check_path" {
+  description = "Path do health check do ALB -> TG"
+  type        = string
+  default     = "/"
+}
