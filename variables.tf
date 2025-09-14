@@ -85,3 +85,40 @@ variable "alb_health_check_path" {
   type        = string
   default     = "/"
 }
+
+########################################
+# ECR: repositório privado para a imagem do Airflow
+########################################
+
+variable "ecr_repo_name" {
+  description = "Nome do repositório ECR para a imagem do Airflow"
+  type        = string
+  default     = "airflow-image"
+}
+
+variable "ecr_image_tag_mutability" {
+  description = "MUTABLE (padrão) ou IMMUTABLE"
+  type        = string
+  default     = "MUTABLE"
+}
+
+########################################
+# ECS Task Definition (Airflow API server)
+########################################
+
+variable "ecs_task_cpu" {
+  description = "CPU units for Fargate task (1024 = 1 vCPU)"
+  type        = string
+  default     = "512" # 0.5 vCPU
+  validation {
+    condition     = contains(["256","512","1024","2048","4096"], var.ecs_task_cpu)
+    error_message = "ecs_task_cpu deve ser um de: 256, 512, 1024, 2048, 4096."
+  }
+}
+
+variable "ecs_task_memory" {
+  description = "Memory (MiB) for Fargate task"
+  type        = string
+  default     = "1024" # 1 GiB
+}
+

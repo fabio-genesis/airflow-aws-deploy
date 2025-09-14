@@ -282,3 +282,148 @@ resource "aws_lb_listener" "http_80" {
   }
 }
 
+########################################
+# ECR: repositório privado para a imagem do Airflow
+########################################
+
+# Descobrir Account ID (para login no ECR)
+data "aws_caller_identity" "current" {}
+
+# Repositório ECR para a imagem do Airflow
+resource "aws_ecr_repository" "airflow_image_repo" {
+  name                 = var.ecr_repo_name
+  image_tag_mutability = var.ecr_image_tag_mutability
+  force_delete         = true
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = { Project = "airflow" }
+}
+
+
+########################################
+# CloudWatch Logs para ECS
+########################################
+resource "aws_cloudwatch_log_group" "airflow" {
+  name              = "/ecs/airflow"
+  retention_in_days = 7
+  tags = { Project = "airflow" }
+}
+
+########################################
+# ECS Cluster (Fargate)
+########################################
+resource "aws_ecs_cluster" "airflow" {
+  name = "airflow-ecs-cluster"
+  setting {
+    name  = "containerInsights"
+    value = "disabled"
+  }
+  tags = { Project = "airflow" }
+}
+
+########################################
+# Função auxiliar para container_definitions
+########################################
+locals {
+  common_env = [
+    { name = "AIRFLOW__API__AUTH_BACKEND",                value = "airflow.providers.fab.auth_manager.api.auth.backend.session" },
+    { name = "AIRFLOW__API__BASE_URL",                    value = "http://${aws_lb.airflow_alb.dns_name}" },
+    { name = "AIRFLOW__CORE__AUTH_MANAGER",               value = "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager" },
+    { name = "AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION",value = "true" },
+    { name = "AIRFLOW__CORE__EXECUTOR",                   value = "LocalExecutor" },
+    { name = "AIRFLOW__CORE__LOAD_EXAMPLES",              value = "false" },
+    { name = "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN",       value = "postgresql+psycopg2://${var.db_username}:${var.db_password}@${aws_db_instance.airflow_db.address}:${aws_db_instance.airflow_db.port}/${var.db_name}?sslmode=require" },
+    { name = "AIRFLOW__LOGGING__BASE_URL",                value = "http://${aws_lb.airflow_alb.dns_name}" },
+    { name = "AIRFLOW__LOGGING__HOSTNAME_CALLABLE",       value = "socket.gethostname" }
+  ]
+}
+
+########################################
+# ECS Task Definition (Airflow Webserver)
+########################################
+resource "aws_ecs_task_definition" "airflow_webserver" {
+  family                   = "airflow-webserver"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = var.ecs_task_cpu
+  memory                   = var.ecs_task_memory
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_execution_role.arn
+
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = "X86_64"
+  }
+
+  container_definitions = jsonencode([
+    {
+      name       = "airflow-webserver"
+      image      = "${aws_ecr_repository.airflow_image_repo.repository_url}:latest"
+      essential  = true
+      entryPoint = ["airflow"]
+      command    = ["webserver"]
+
+      portMappings = [
+        {
+          containerPort = 8080
+          hostPort      = 8080
+          protocol      = "tcp"
+          appProtocol   = "http"
+        }
+      ]
+
+      environment = local.common_env
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.airflow.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "ecs"
+        }
+      }
+    }
+  ])
+
+  tags = { Project = "airflow" }
+}
+
+########################################
+# ECS Service (Webserver) anexado ao ALB/TG
+########################################
+resource "aws_ecs_service" "airflow_webserver" {
+  name             = "airflow-webserver-svc"
+  cluster          = aws_ecs_cluster.airflow.id
+  launch_type      = "FARGATE"
+  desired_count    = 1
+  task_definition  = aws_ecs_task_definition.airflow_webserver.arn
+  platform_version = "LATEST"
+
+  wait_for_steady_state = true
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = false  // em prod, considere true
+  }
+
+  network_configuration {
+    subnets          = data.aws_subnets.default.ids
+    security_groups  = [aws_security_group.ecs_sg.id]
+    assign_public_ip = true
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.airflow_tg.arn
+    container_name   = "airflow-webserver"
+    container_port   = 8080
+  }
+
+  depends_on = [
+    aws_lb_listener.http_80
+  ]
+
+  tags = { Project = "airflow" }
+}

@@ -78,3 +78,43 @@ output "tg_protocol_port" {
 output "tg_target_type" {
   value = aws_lb_target_group.airflow_tg.target_type
 }
+
+########################################
+# ECR: repositório privado para a imagem do Airflow
+########################################
+
+output "ecr_repository_url" {
+  description = "URL do repositório ECR"
+  value       = aws_ecr_repository.airflow_image_repo.repository_url
+}
+
+output "ecr_repository_arn" {
+  value = aws_ecr_repository.airflow_image_repo.arn
+}
+
+output "ecr_login_command" {
+  description = "Comando para autenticar no ECR"
+  value       = "aws ecr get-login-password --region ${var.aws_region} --profile ${var.aws_profile} | docker login --username AWS --password-stdin ${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
+}
+
+output "docker_build_command" {
+  value = "docker build --no-cache -t airflow-image:latest ."
+}
+
+output "docker_tag_command" {
+  value = "docker tag airflow-image:latest ${aws_ecr_repository.airflow_image_repo.repository_url}:latest"
+}
+
+output "docker_push_command" {
+  value = "docker push ${aws_ecr_repository.airflow_image_repo.repository_url}:latest"
+}
+
+output "airflow_alb_dns" {
+  description = "DNS do Application Load Balancer"
+  value       = aws_lb.airflow_alb.dns_name
+}
+
+output "airflow_url" {
+  description = "URL HTTP do Airflow via ALB"
+  value       = "http://${aws_lb.airflow_alb.dns_name}"
+}

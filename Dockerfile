@@ -11,8 +11,8 @@ ENV AIRFLOW__CORE__AUTH_MANAGER=airflow.providers.fab.auth_manager.fab_auth_mana
 ENV AIRFLOW__CORE__EXECUTOR=LocalExecutor
 ENV AIRFLOW__LOGGING__HOSTNAME_CALLABLE=socket.gethostname
 ENV AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:airflowadmin123@airflow-metadata-db.c4r6wi604g82.us-east-1.rds.amazonaws.com:5432/airflow?sslmode=require
-ENV AIRFLOW__API__BASE_URL=http://**your-alb-dns**
-ENV AIRFLOW__LOGGING__BASE_URL=http://**your-alb-dns**
+ENV AIRFLOW__API__BASE_URL=http://my-airflow-alb-2112436569.us-east-1.elb.amazonaws.com
+ENV AIRFLOW__LOGGING__BASE_URL=http://my-airflow-alb-2112436569.us-east-1.elb.amazonaws.com
 
 COPY dags/ /opt/airflow/dags/
 
