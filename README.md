@@ -5,8 +5,8 @@ Um exemplo de como implantar o [Apache Airflow](https://github.com/apache/airflo
 - [Resumo](#resumo)  
   - [Estrutura do projeto](#estrutura-do-projeto)  
 - [Primeiros passos](#primeiros-passos)  
-  - [⚙️ Ambiente de desenvolvimento local (opcional)](#️-ambiente-de-desenvolvimento-local-opcional)  
-  - [🚀 Configurar um cluster ECS (produção)](#-configurar-um-cluster-ecs-produção)  
+  - [Ambiente de desenvolvimento local (opcional)](#️-ambiente-de-desenvolvimento-local-opcional)  
+  - [Configurar um cluster ECS (produção)](#-configurar-um-cluster-ecs-produção)  
 - [Tarefas independentes](#tarefas-independentes)  
 - [Logs](#logs)  
 - [Custo](#custo)  
@@ -97,22 +97,31 @@ cp infrastructure/terraform.tfvars.template infrastructure/terraform.tfvars
 
 3. Criar repositório ECR para armazenar a imagem customizada do Airflow  
 ```shell
-terraform -chdir=infrastructure apply -target=aws_ecr_repository.airflow
+$env:AWS_PROFILE = "<seu-profile>"
+$env:AWS_REGION = "us-east-1"
+$env:AWS_DEFAULT_REGION = "us-east-1"
+terraform -chdir=infrastructure apply -target="aws_ecr_repository.airflow"
 ```
 
 4. Obter URI do repositório via `awscli` ou [console AWS](https://console.aws.amazon.com/ecr/repositories)  
 ```shell
-aws ecr describe-repositories
+aws ecr describe-repositories --query "repositories[].repositoryUri" --output text
+$ACCOUNT_ID = (aws sts get-caller-identity --query Account --output text)
+$REGION = if ($env:AWS_REGION) { $env:AWS_REGION } else { "us-east-1" }
+$REPO_URI = (aws ecr describe-repositories --query "repositories[?repositoryName=='deploy-airflow-on-ecs-fargate-airflow'].repositoryUri" --output text)
 ```
 
 5. Autenticar Docker/Podman no ECR  
 ```shell
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ***.dkr.ecr.us-east-1.amazonaws.com
+aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com"
 ```
 
 6. Construir e enviar a imagem do contêiner  
 ```shell
-export REPO_URI="***.dkr.ecr.us-east-1.amazonaws.com/deploy-airflow-on-ecs-fargate-airflow"
+if (-not $REPO_URI) {
+  $REPO_URI = "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/deploy-airflow-on-ecs-fargate-airflow"
+}
+$REPO_URI
 docker buildx build -t "${REPO_URI}" -f build/prod/Containerfile --platform linux/amd64 .
 docker push "${REPO_URI}"
 ```
@@ -124,12 +133,15 @@ terraform -chdir=infrastructure apply
 
 8. Inicializar o banco de metadados do Airflow como tarefa ECS independente  
 ```shell
-python3 scripts/run_task.py --wait-tasks-stopped --command 'db init'
+$env:AWS_PROFILE = "<seu-profile>"
+$env:AWS_REGION = "us-east-1"
+$env:AWS_DEFAULT_REGION = "us-east-1"
+py -3 scripts/run_task.py --profile $env:AWS_PROFILE --wait-tasks-stopped --command 'db init'
 ```
 
 9. Criar um usuário admin do mesmo modo  
 ```shell
-python3 scripts/run_task.py --wait-tasks-stopped --command   'users create --username airflow --firstname airflow --lastname airflow --password airflow --email airflow@example.com --role Admin'
+py -3 scripts/run_task.py --profile $env:AWS_PROFILE --wait-tasks-stopped --command "users create --username airflow --firstname airflow --lastname airflow --password airflow --email airflow@example.com --role Admin"
 ```
 
 10. Obter e abrir a URI do Load Balancer do webserver  
