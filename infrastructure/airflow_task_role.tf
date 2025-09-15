@@ -85,6 +85,26 @@ resource "aws_iam_role_policy_attachment" "airflow_ecs_exec" {
   policy_arn = aws_iam_policy.ecs_task_ecs_exec.arn
 }
 
+resource "aws_iam_policy" "airflow_firehose_put_record_batch" {
+  name_prefix = "airflow-firehose-put-record-batch-"
+  path        = "/"
+  description = "Grant containers the permissions required for routing logs to Kinesis Data Firehose."
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "firehose:PutRecordBatch"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "airflow_firehose_put_record_batch" {
+  role       = aws_iam_role.airflow_task.name
+  policy_arn = aws_iam_policy.airflow_firehose_put_record_batch.arn
+}
 
 # Allow ECS services to read secrets from AWS Secret Manager.
 resource "aws_iam_policy" "secret_manager_read_secret" {

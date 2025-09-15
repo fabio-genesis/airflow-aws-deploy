@@ -55,29 +55,7 @@ Esses exemplos de configuração são úteis mesmo para quem não executa Airflo
 
 ## Primeiros passos
 
-### ⚙️ Ambiente de desenvolvimento local (opcional)
-
-> Esta seção é **apenas para desenvolvimento/testes locais** usando Docker Compose.  
-> Se o seu objetivo é implantar diretamente em **produção no ECS Fargate**, pule para [🚀 Configurar um cluster ECS (produção)](#-configurar-um-cluster-ecs-produção).
-
-1. Inicializar o banco de metadados  
-```shell
-docker compose run --rm airflow-cli db init
-```
-
-2. Criar um usuário admin  
-```shell
-docker compose run --rm airflow-cli users create --email airflow@example.com --firstname airflow --lastname airflow --password airflow --username airflow --role Admin
-```
-
-3. Iniciar todos os serviços  
-```shell
-docker compose up -d
-```
-
----
-
-### 🚀 Configurar um cluster ECS (produção)
+### Configurar um cluster ECS (produção)
 
 > A partir daqui, começa a configuração do ambiente em **produção**, implantando o Airflow no Amazon ECS Fargate com Terraform e ECR.  
 
@@ -93,7 +71,7 @@ cp infrastructure/terraform.tfvars.template infrastructure/terraform.tfvars
 
 3. Criar repositório ECR para armazenar a imagem customizada do Airflow  
 ```shell
-$env:AWS_PROFILE = "<seu-profile>"
+$env:AWS_PROFILE = "ons-dg-00-dev"
 $env:AWS_REGION = "us-east-1"
 $env:AWS_DEFAULT_REGION = "us-east-1"
 terraform -chdir=infrastructure apply -target="aws_ecr_repository.airflow"
@@ -131,11 +109,14 @@ terraform -chdir=infrastructure apply
   a) Executar automaticamente no primeiro start do scheduler (recomendado: adicionar comando `airflow db upgrade` no entrypoint inicial)  
   b) Usar ECS Exec no container do scheduler após o deploy inicial:  
 ```shell
-aws ecs list-tasks --cluster airflow --service-name airflow-scheduler --query "taskArns[0]" --output text --profile $env:AWS_PROFILE | % { aws ecs execute-command --cluster airflow --task $_ --container scheduler --interactive --command "airflow db init" --profile $env:AWS_PROFILE }
+$env:AWS_PROFILE = "ons-dg-00-dev"
+$env:AWS_REGION = "us-east-1"
+$env:AWS_DEFAULT_REGION = "us-east-1"
+py -3 scripts/run_task.py --profile $env:AWS_PROFILE --wait-tasks-stopped --command 'db init'
 ```
   Após isso, criar o usuário admin via ECS Exec:  
 ```shell
-aws ecs execute-command --cluster airflow --task <TASK_ARN> --container scheduler --interactive --command "airflow users create --username airflow --firstname airflow --lastname airflow --password airflow --email airflow@example.com --role Admin" --profile $env:AWS_PROFILE
+py -3 scripts/run_task.py --profile $env:AWS_PROFILE --wait-tasks-stopped --command "users create --username airflow --firstname airflow --lastname airflow --password airflow --email airflow@example.com --role Admin"
 ```
 
 9. Obter e abrir a URI do Load Balancer do webserver  
