@@ -133,9 +133,6 @@ terraform -chdir=infrastructure apply
 
 8. Inicializar o banco de metadados do Airflow como tarefa ECS independente  
 ```shell
-$env:AWS_PROFILE = "<seu-profile>"
-$env:AWS_REGION = "us-east-1"
-$env:AWS_DEFAULT_REGION = "us-east-1"
 py -3 scripts/run_task.py --profile $env:AWS_PROFILE --wait-tasks-stopped --command 'db init'
 ```
 
@@ -146,5 +143,5 @@ py -3 scripts/run_task.py --profile $env:AWS_PROFILE --wait-tasks-stopped --comm
 
 10. Obter e abrir a URI do Load Balancer do webserver  
 ```shell
-aws elbv2 describe-load-balancers
+aws elbv2 describe-load-balancers --query "LoadBalancers[?contains(LoadBalancerName, 'airflow-webserver')].DNSName | [0]" --output text --profile $env:AWS_PROFILE
 ```

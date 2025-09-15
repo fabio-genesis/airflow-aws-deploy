@@ -3,14 +3,10 @@
 # python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key())'
 fernet_key = ""
 
-metadata_db {
+metadata_db = {
   db_name  = "airflow"
   username = "airflow"
-  password = "airflow"
+  password = "Airflow1234!"
   port     = 5432
 }
 
-# When true, triggers a new deployment for each ecs service
-# This can be useful when updating tasks to use a newer container image with same
-# image/tag combination (e.g., myimage:latest)
-force_new_ecs_service_deployment = true
