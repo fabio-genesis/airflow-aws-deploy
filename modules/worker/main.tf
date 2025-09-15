@@ -28,7 +28,7 @@ resource "aws_ecs_task_definition" "airflow_worker" {
         initProcessEnabled = true
       }
       environment = concat(
-        local.airflow_task_common_environment,
+        var.airflow_task_common_environment,
         # Note: DUMB_INIT_SETSID required to handle warm shutdown of the celery workers properly
         #  https://airflow.apache.org/docs/docker-stack/entrypoint.html#signal-propagation
         [

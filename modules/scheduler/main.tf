@@ -21,7 +21,7 @@ resource "aws_ssm_parameter" "airflow_ecs_cloudwatch_agent_config" {
         debug  = false
       }
       metrics = {
-        namespace = local.airflow_cloud_watch_metrics_namespace
+  namespace = var.airflow_cloud_watch_metrics_namespace
         metrics_collected = {
           # These are the default values
           statsd = {
@@ -70,7 +70,7 @@ resource "aws_ecs_task_definition" "airflow_scheduler" {
       linuxParameters = {
         initProcessEnabled = true
       }
-      environment = local.airflow_task_common_environment
+  environment = var.airflow_task_common_environment
       user        = "50000:0"
       logConfiguration = {
         logDriver = "awslogs"
@@ -175,3 +175,7 @@ resource "aws_appautoscaling_scheduled_action" "airflow_scheduler_scheduled_scal
     max_capacity = 1
   }
 }
+
+// ----------------------------------------------------------------------------
+// Module inputs
+// ----------------------------------------------------------------------------

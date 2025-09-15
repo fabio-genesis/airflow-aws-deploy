@@ -63,7 +63,7 @@ resource "aws_ecs_task_definition" "airflow_metrics" {
         "--period",
         "10"
       ]
-      environment = local.airflow_task_common_environment
+  environment = var.airflow_task_common_environment
       user        = "50000:0"
       logConfiguration = {
         logDriver = "awslogs"

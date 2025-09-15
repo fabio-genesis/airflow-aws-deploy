@@ -51,7 +51,7 @@ resource "aws_ecs_task_definition" "airflow_standalone_task" {
       memory      = 512
       essential   = true
       command     = ["version"]
-      environment = local.airflow_task_common_environment
+  environment = var.airflow_task_common_environment
       user        = "50000:0"
       # Here is an example of how to forward logs to a sidecar fluentbit log router.
       # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/firelens-example-taskdefs.html#firelens-example-firehose
@@ -80,7 +80,7 @@ resource "aws_ecs_task_definition" "airflow_standalone_task" {
     {
       name      = "fluentbit"
       essential = true
-      image     = local.fluentbit_image,
+  image     = var.fluentbit_image,
       firelensConfiguration = {
         type = "fluentbit"
       }

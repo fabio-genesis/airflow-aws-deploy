@@ -15,11 +15,11 @@ locals {
     },
     {
       name  = "AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER"
-      value = "s3://${aws_s3_bucket.airflow.bucket}/remote_base_log_folder/"
+      value = "s3://${module.storage.bucket_name}/remote_base_log_folder/"
     },
     {
       name  = "X_AIRFLOW_SQS_CELERY_BROKER_PREDEFINED_QUEUE_URL"
-      value = aws_sqs_queue.celery_broker.url
+      value = module.celery.queue_url
     },
     # Use the Amazon SecretsManagerBackend to retrieve secret configuration values at
     # runtime from Secret Manager. Only the *name* of the secret is needed here, so an
@@ -30,15 +30,15 @@ locals {
     {
       name = "AIRFLOW__CORE__SQL_ALCHEMY_CONN_SECRET"
       # Remove the "config_prefix" using `substr`
-      value = substr(aws_secretsmanager_secret.sql_alchemy_conn.name, 45, -1)
+      value = substr(module.secret.sql_alchemy_conn_arn, 45, -1)
     },
     {
       name  = "AIRFLOW__CORE__FERNET_KEY_SECRET"
-      value = substr(aws_secretsmanager_secret.fernet_key.name, 45, -1)
+      value = substr(module.secret.fernet_key_arn, 45, -1)
     },
     {
       name  = "AIRFLOW__CELERY__RESULT_BACKEND_SECRET"
-      value = substr(aws_secretsmanager_secret.celery_result_backend.name, 45, -1)
+      value = substr(module.secret.celery_result_backend_arn, 45, -1)
     },
     {
       # Note: Even if one sets this to "True" in airflow.cfg a hidden environment
@@ -64,8 +64,7 @@ module "storage" {
 
 module "vpc" {
   source = "./modules/vpc"
-  # Example input once exposed:
-  # aws_region = var.aws_region
+  aws_region = var.aws_region
 }
 
 module "ecr" {
@@ -100,8 +99,7 @@ module "iam" {
 
 module "metadata" {
   source = "./modules/metadata"
-  # Example input once exposed:
-  # metadata_db = var.metadata_db
+  metadata_db = var.metadata_db
 }
 
 module "secret" {
@@ -118,31 +116,38 @@ module "secret" {
 
 module "scheduler" {
   source = "./modules/scheduler"
-  # aws_region                       = var.aws_region
-  # force_new_ecs_service_deployment = var.force_new_ecs_service_deployment
+  aws_region                           = var.aws_region
+  force_new_ecs_service_deployment     = var.force_new_ecs_service_deployment
+  airflow_task_common_environment      = local.airflow_task_common_environment
+  airflow_cloud_watch_metrics_namespace = local.airflow_cloud_watch_metrics_namespace
 }
 
 module "webserver" {
   source = "./modules/webserver"
-  # aws_region                       = var.aws_region
-  # force_new_ecs_service_deployment = var.force_new_ecs_service_deployment
+  aws_region                       = var.aws_region
+  force_new_ecs_service_deployment = var.force_new_ecs_service_deployment
+  airflow_task_common_environment  = local.airflow_task_common_environment
 }
 
 module "worker" {
   source = "./modules/worker"
-  # aws_region                       = var.aws_region
-  # force_new_ecs_service_deployment = var.force_new_ecs_service_deployment
+  aws_region                       = var.aws_region
+  force_new_ecs_service_deployment = var.force_new_ecs_service_deployment
+  airflow_task_common_environment  = local.airflow_task_common_environment
 }
 
 module "metrics" {
   source = "./modules/metrics"
-  # aws_region                       = var.aws_region
-  # force_new_ecs_service_deployment = var.force_new_ecs_service_deployment
+  aws_region                       = var.aws_region
+  force_new_ecs_service_deployment = var.force_new_ecs_service_deployment
+  airflow_task_common_environment  = local.airflow_task_common_environment
 }
 
 module "standalone_task" {
   source = "./modules/standalone_task"
-  # aws_region = var.aws_region
+  aws_region                          = var.aws_region
+  fluentbit_image                     = local.fluentbit_image
+  airflow_task_common_environment     = local.airflow_task_common_environment
 }
 
 module "athena" {
