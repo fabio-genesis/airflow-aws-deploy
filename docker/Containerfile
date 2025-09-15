@@ -7,8 +7,8 @@ RUN apt-get update \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
-# Se seu requirements está em build/prod
-COPY --chown=airflow:airflow build/prod/requirements.txt "${AIRFLOW_HOME}/requirements.txt"
+
+COPY --chown=airflow:airflow build/docker/requirements.txt "${AIRFLOW_HOME}/requirements.txt"
 
 USER airflow
 RUN pip install --upgrade pip \
@@ -17,7 +17,7 @@ RUN pip install --upgrade pip \
 COPY --chown=airflow:airflow dags "${AIRFLOW_HOME}/dags"
 COPY --chown=airflow:airflow plugins "${AIRFLOW_HOME}/plugins"
 COPY --chown=airflow:airflow deploy_airflow_on_ecs_fargate "${AIRFLOW_HOME}/deploy_airflow_on_ecs_fargate"
-COPY --chown=airflow:airflow build/prod/airflow.cfg "${AIRFLOW_HOME}/airflow.cfg"
+COPY --chown=airflow:airflow build/docker/airflow.cfg "${AIRFLOW_HOME}/airflow.cfg"
 COPY --chown=airflow:airflow scripts "${AIRFLOW_HOME}/scripts"
 
 ENV PYTHONPATH="${AIRFLOW_HOME}/deploy_airflow_on_ecs_fargate:${PYTHONPATH}"
