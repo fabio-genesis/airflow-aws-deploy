@@ -43,8 +43,6 @@ variable "force_new_ecs_service_deployment" {
 }
 
 locals {
-  fluentbit_image = "public.ecr.aws/aws-observability/aws-for-fluent-bit:stable"
-
   airflow_task_common_environment = [
     {
       name  = "AIRFLOW__WEBSERVER__INSTANCE_NAME"

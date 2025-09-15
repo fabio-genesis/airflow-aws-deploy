@@ -7,12 +7,10 @@ Um exemplo de como implantar o [Apache Airflow](https://github.com/apache/airflo
 - [Primeiros passos](#primeiros-passos)  
   - [Ambiente de desenvolvimento local (opcional)](#️-ambiente-de-desenvolvimento-local-opcional)  
   - [Configurar um cluster ECS (produção)](#-configurar-um-cluster-ecs-produção)  
-- [Tarefas independentes](#tarefas-independentes)  
 - [Logs](#logs)  
 - [Custo](#custo)  
 - [Autoescalonamento](#autoescalonamento)  
 - [Exemplos](#exemplos)  
-  - [Executar um comando arbitrário como tarefa independente](#executar-um-comando-arbitrário-como-tarefa-independente)  
   - [Abrir um shell em um contêiner de serviço usando ECS exec](#abrir-um-shell-em-um-contêiner-de-serviço-usando-ecs-exec)  
   - [Escalonar manualmente um serviço para zero](#escalonar-manualmente-um-serviço-para-zero)  
 
@@ -27,7 +25,6 @@ O Airflow e o ECS possuem muitos recursos e opções de configuração. Este pro
 - Redirecionar logs do serviço Airflow para o CloudWatch e para o Kinesis Firehose usando [fluentbit](https://fluentbit.io/)  
 - Usar [remote_logging](https://airflow.apache.org/docs/apache-airflow/stable/logging-monitoring/logging-tasks.html#logging-for-tasks) para enviar/receber logs de workers para/de S3  
 - Usar o provedor AWS [SecretsManagerBackend](https://airflow.apache.org/docs/apache-airflow-providers-amazon/stable/secrets-backends/aws-secrets-manager.html) para armazenar/consumir configurações sensíveis no [SecretsManager](https://aws.amazon.com/secrets-manager/)  
-- Executar um comando único como tarefa ECS independente (ex.: `airflow db init`)  
 - Abrir um shell em um contêiner em execução via ECS exec  
 - Enviar métricas statsd do Airflow para o CloudWatch  
 
@@ -51,8 +48,7 @@ Esses exemplos de configuração são úteis mesmo para quem não executa Airflo
 │   └── *.tf ........................... exemplo de configuração do cluster ECS
 ├── plugins ............................ diretório AIRFLOW_HOME/plugins
 └── scripts
-    ├── put_airflow_worker_xxx.py ...... envia métricas de autoescalonamento customizadas ao CloudWatch
-    └── run_task.py .................... exemplo de script python para executar tarefas independentes no cluster ECS
+  └── put_airflow_worker_xxx.py ...... envia métricas de autoescalonamento customizadas ao CloudWatch
 ```
 
 ---
@@ -131,17 +127,18 @@ docker push "${REPO_URI}"
 terraform -chdir=infrastructure apply
 ```
 
-8. Inicializar o banco de metadados do Airflow como tarefa ECS independente  
+8. Inicializar o banco de metadados do Airflow (opções)  
+  a) Executar automaticamente no primeiro start do scheduler (recomendado: adicionar comando `airflow db upgrade` no entrypoint inicial)  
+  b) Usar ECS Exec no container do scheduler após o deploy inicial:  
 ```shell
-py -3 scripts/run_task.py --profile $env:AWS_PROFILE --wait-tasks-stopped --command 'db init'
+aws ecs list-tasks --cluster airflow --service-name airflow-scheduler --query "taskArns[0]" --output text --profile $env:AWS_PROFILE | % { aws ecs execute-command --cluster airflow --task $_ --container scheduler --interactive --command "airflow db init" --profile $env:AWS_PROFILE }
+```
+  Após isso, criar o usuário admin via ECS Exec:  
+```shell
+aws ecs execute-command --cluster airflow --task <TASK_ARN> --container scheduler --interactive --command "airflow users create --username airflow --firstname airflow --lastname airflow --password airflow --email airflow@example.com --role Admin" --profile $env:AWS_PROFILE
 ```
 
-9. Criar um usuário admin do mesmo modo  
-```shell
-py -3 scripts/run_task.py --profile $env:AWS_PROFILE --wait-tasks-stopped --command "users create --username airflow --firstname airflow --lastname airflow --password airflow --email airflow@example.com --role Admin"
-```
-
-10. Obter e abrir a URI do Load Balancer do webserver  
+9. Obter e abrir a URI do Load Balancer do webserver  
 ```shell
 aws elbv2 describe-load-balancers --query "LoadBalancers[?contains(LoadBalancerName, 'airflow-webserver')].DNSName | [0]" --output text --profile $env:AWS_PROFILE
 ```
