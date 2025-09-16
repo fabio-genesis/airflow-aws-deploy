@@ -7,7 +7,7 @@ module "database" {
   source             = "./modules/database"
   vpc_id             = module.network.vpc_id
   private_subnet_ids = module.network.private_subnet_ids
-  allowed_sg_ids     = [] # Sem dependência do módulo app
+  allowed_sg_ids     = [module.network.base_sg_id, module.app.web_sg_id, module.app.worker_sg_id]
   db_name            = var.db_name
   db_username        = var.db_username
   db_password        = var.db_password
