@@ -77,9 +77,14 @@ terraform -chdir=infra apply
 ### 5. Construir e enviar imagem Docker
 
 ```sh
-make build-prod
-export REPO_URI=<uri-do-seu-ecr>
-make push
+$REPO_URI = (aws ecr describe-repositories --query "repositories[?repositoryName=='deploy-airflow-on-ecs-fargate-airflow'].repositoryUri" --output text)
+
+docker buildx build -t "${REPO_URI}:latest" -f containers/Dockerfile --platform linux/amd64 .
+
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 730335315247.dkr.ecr.us-east-1.amazonaws.com
+
+docker push "${REPO_URI}:latest"
+
 ```
 
 
