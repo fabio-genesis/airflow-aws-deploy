@@ -3,6 +3,16 @@ variable "aws_region" {
   default = "us-east-1"
 }
 
+variable "iam_role_ecs" {
+  type        = string
+  description = "IAM role para execução de tasks."
+}
+
+variable "aws_ecr_repository" {
+  type        = string
+  description = "Nome do repositório ECR do Airflow."
+}
+
 variable "db_name" {
   type        = string
   description = "Nome do banco de dados do Airflow."

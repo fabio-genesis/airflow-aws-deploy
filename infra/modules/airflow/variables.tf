@@ -24,3 +24,14 @@ variable "airflow_task_common_environment" {
   description = "Common environment variables for Airflow tasks"
   default = []
 }
+
+
+variable "iam_role_ecs" {
+  type        = string
+  description = "IAM role para execução de tasks."
+}
+
+variable "aws_ecr_repository" {
+  type        = string
+  description = "Nome do repositório ECR do Airflow."
+}

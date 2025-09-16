@@ -1,10 +1,3 @@
-resource "aws_ecr_repository" "airflow" {
-  name = "deploy-airflow-on-ecs-fargate-airflow"
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-}
-
 resource "aws_ecs_cluster" "airflow" {
   name = "airflow"
   setting {
@@ -30,147 +23,12 @@ resource "aws_s3_bucket" "airflow" {
   bucket_prefix = var.airflow_bucket_name
 }
 
-# Security Groups para serviços
-resource "aws_security_group" "web" {
-  name        = "airflow-web-sg"
-  description = "SG for Airflow Webserver"
-  vpc_id      = var.vpc_id
-  ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  tags = { Name = "airflow-web-sg" }
-}
 
-resource "aws_security_group" "worker" {
-  name        = "airflow-worker-sg"
-  description = "SG for Airflow Worker"
-  vpc_id      = var.vpc_id
-  ingress {
-    from_port   = 8793
-    to_port     = 8793
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  tags = { Name = "airflow-worker-sg" }
-}
-
-# IAM Role para execução de tasks
-resource "aws_iam_role" "task_execution" {
-  name = "airflow-task-execution-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = { Service = "ecs-tasks.amazonaws.com" }
-      Action = "sts:AssumeRole"
-    }]
-  })
-}
-
-# Task Definitions (exemplo simplificado)
-resource "aws_ecs_task_definition" "web" {
-  family                   = "airflow-web"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = "512"
-  memory                   = "1024"
-  execution_role_arn       = aws_iam_role.task_execution.arn
-  container_definitions    = jsonencode([
-    {
-      name      = "web"
-      image     = aws_ecr_repository.airflow.repository_url
-      essential = true
-      portMappings = [{ containerPort = 8080, protocol = "tcp" }]
-    }
-  ])
-}
-
-resource "aws_ecs_task_definition" "worker" {
-  family                   = "airflow-worker"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = "512"
-  memory                   = "1024"
-  execution_role_arn       = aws_iam_role.task_execution.arn
-  container_definitions    = jsonencode([
-    {
-      name      = "worker"
-      image     = aws_ecr_repository.airflow.repository_url
-      essential = true
-      portMappings = [{ containerPort = 8793, protocol = "tcp" }]
-    }
-  ])
-}
-
-# ECS Services (exemplo simplificado)
-resource "aws_ecs_service" "web" {
-  name            = "airflow-web"
-  cluster         = aws_ecs_cluster.airflow.id
-  task_definition = aws_ecs_task_definition.web.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
-  network_configuration {
-    subnets          = var.private_subnet_ids
-    security_groups  = [aws_security_group.web.id]
-    assign_public_ip = false
-  }
-
-  wait_for_steady_state = true
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = false
-  }
-    timeouts {
-      create = "5m"
-      update = "5m"
-    }
-}
-
-resource "aws_ecs_service" "worker" {
-  name            = "airflow-worker"
-  cluster         = aws_ecs_cluster.airflow.id
-  task_definition = aws_ecs_task_definition.worker.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
-  network_configuration {
-    subnets          = var.private_subnet_ids
-    security_groups  = [aws_security_group.worker.id]
-    assign_public_ip = false
-  }
-
-  wait_for_steady_state = true
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = false
-  }
-    timeouts {
-      create = "5m"
-      update = "5m"
-    }
-}
-
-# CloudWatch Log Group for webserver
 resource "aws_cloudwatch_log_group" "airflow_webserver" {
   name_prefix       = "/deploy-airflow-on-ecs-fargate/airflow-webserver/"
   retention_in_days = 1
 }
 
-# Security Group for webserver service
 resource "aws_security_group" "airflow_webserver_service" {
   name_prefix = "airflow-webserver-service-"
   description = "Allow HTTP inbound traffic from load balancer"
@@ -195,14 +53,14 @@ resource "aws_ecs_task_definition" "airflow_webserver" {
   family             = "airflow-webserver"
   cpu                = 1024
   memory             = 2048
-  execution_role_arn = aws_iam_role.task_execution.arn
-  task_role_arn      = aws_iam_role.task_execution.arn
+  execution_role_arn = var.iam_role_ecs
+  task_role_arn      = var.iam_role_ecs
   network_mode       = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   container_definitions = jsonencode([
     {
       name   = "webserver"
-      image  = join(":", [aws_ecr_repository.airflow.repository_url, "latest"])
+      image  = var.aws_ecr_repository
       cpu    = 1024
       memory = 2048
       portMappings = [
