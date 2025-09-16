@@ -67,10 +67,10 @@ resource "aws_glue_catalog_table" "airflow_standalone_task_logs" {
   table_type    = local.table_type
   parameters = merge(
     local.parameters,
-    { "storage.location.template" = "s3://${aws_s3_bucket.airflow.bucket}/kinesis-firehose/airflow-standalone-task/$${datehour}/" }
+    { "storage.location.template" = "s3://${var.s3_bucket}/kinesis-firehose/airflow-standalone-task/$${datehour}/" }
   )
   storage_descriptor {
-    location      = "s3://${aws_s3_bucket.airflow.bucket}/kinesis-firehose/airflow-standalone-task"
+  location      = "s3://${var.s3_bucket}/kinesis-firehose/airflow-standalone-task"
     input_format  = local.storage_descriptor.input_format
     output_format = local.storage_descriptor.output_format
     ser_de_info {

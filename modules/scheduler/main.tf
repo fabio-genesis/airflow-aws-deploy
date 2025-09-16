@@ -39,8 +39,8 @@ resource "aws_ecs_task_definition" "airflow_scheduler" {
   family             = "airflow-scheduler"
   cpu                = 1024
   memory             = 2048
-  execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn      = aws_iam_role.airflow_task.arn
+    execution_role_arn = var.task_execution_role_arn
+    task_role_arn      = var.task_role_arn
   network_mode       = "awsvpc"
   runtime_platform {
     operating_system_family = "LINUX"
@@ -50,7 +50,7 @@ resource "aws_ecs_task_definition" "airflow_scheduler" {
   container_definitions = jsonencode([
     {
       name   = "scheduler"
-      image  = join(":", [aws_ecr_repository.airflow.repository_url, "latest"])
+        image  = join(":", [var.ecr_repository_url, "latest"])
       cpu    = 1024
       memory = 2048
       healthcheck = {
@@ -105,7 +105,7 @@ resource "aws_ecs_task_definition" "airflow_scheduler" {
 resource "aws_security_group" "airflow_scheduler_service" {
   name_prefix = "airflow-scheduler-"
   description = "Deny all incoming traffic"
-  vpc_id      = aws_vpc.main.id
+    vpc_id      = var.vpc_id
   egress {
     from_port   = 0
     to_port     = 0
@@ -118,7 +118,7 @@ resource "aws_ecs_service" "airflow_scheduler" {
   name = "airflow-scheduler"
   # Note: If a revision is not specified, the latest ACTIVE revision is used.
   task_definition = aws_ecs_task_definition.airflow_scheduler.family
-  cluster         = aws_ecs_cluster.airflow.arn
+  cluster         = var.ecs_cluster_arn
   # Note: If using awsvpc network mode, do not specify iam_role.
   # iam_role =
   deployment_controller {
@@ -133,7 +133,7 @@ resource "aws_ecs_service" "airflow_scheduler" {
   enable_execute_command = true
   launch_type            = "FARGATE"
   network_configuration {
-    subnets          = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+      subnets          = var.public_subnet_ids
     assign_public_ip = true
     security_groups  = [aws_security_group.airflow_scheduler_service.id]
   }
@@ -145,7 +145,7 @@ resource "aws_ecs_service" "airflow_scheduler" {
 resource "aws_appautoscaling_target" "airflow_scheduler" {
   max_capacity       = 1
   min_capacity       = 0
-  resource_id        = "service/${aws_ecs_cluster.airflow.name}/${aws_ecs_service.airflow_scheduler.name}"
+    resource_id        = "service/${var.ecs_cluster_name}/${aws_ecs_service.airflow_scheduler.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
 }

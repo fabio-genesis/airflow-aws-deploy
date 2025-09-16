@@ -45,7 +45,7 @@ resource "aws_iam_policy" "airflow_sqs_read_write" {
           "sqs:ChangeMessageVisibility",
           "sqs:GetQueueAttributes",
         ]
-        Resource = aws_sqs_queue.celery_broker.arn
+  Resource = var.sqs_queue_arn
       }
     ]
   })
@@ -120,11 +120,7 @@ resource "aws_iam_policy" "secret_manager_read_secret" {
           "secretsmanager:ListSecretVersionIds"
         ]
         Effect = "Allow"
-        Resource = [
-          aws_secretsmanager_secret.fernet_key.arn,
-          aws_secretsmanager_secret.sql_alchemy_conn.arn,
-          aws_secretsmanager_secret.celery_result_backend.arn
-        ]
+        Resource = var.secret_arns
       },
     ]
   })
@@ -155,8 +151,8 @@ resource "aws_iam_policy" "airflow_task_storage" {
           "s3:PutObject"
         ],
         Resource = [
-          aws_s3_bucket.airflow.arn,
-          "${aws_s3_bucket.airflow.arn}/*",
+          var.s3_bucket_arn,
+          "${var.s3_bucket_arn}/*",
         ]
       }
     ]

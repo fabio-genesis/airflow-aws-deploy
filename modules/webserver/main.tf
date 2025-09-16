@@ -1,7 +1,7 @@
 resource "aws_security_group" "airflow_webserver_alb" {
   name_prefix = "airflow-webserver-alb-"
   description = "Allow TLS inbound traffic"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = var.vpc_id
   ingress {
     from_port   = 80
     to_port     = 80
@@ -21,7 +21,7 @@ resource "aws_lb" "airflow_webserver" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.airflow_webserver_alb.id]
-  subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+  subnets            = var.public_subnet_ids
   ip_address_type    = "ipv4"
 }
 
@@ -35,7 +35,7 @@ resource "aws_lb_target_group" "airflow_webserver" {
   port        = 8080
   protocol    = "HTTP"
   target_type = "ip"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = var.vpc_id
   health_check {
     enabled = true
     path    = "/health"
@@ -65,8 +65,8 @@ resource "aws_ecs_task_definition" "airflow_webserver" {
   family             = "airflow-webserver"
   cpu                = 1024
   memory             = 2048
-  execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn      = aws_iam_role.airflow_task.arn
+  execution_role_arn = var.task_execution_role_arn
+  task_role_arn      = var.task_role_arn
   network_mode       = "awsvpc"
   runtime_platform {
     operating_system_family = "LINUX"
@@ -78,7 +78,7 @@ resource "aws_ecs_task_definition" "airflow_webserver" {
   container_definitions = jsonencode([
     {
       name   = "webserver"
-      image  = join(":", [aws_ecr_repository.airflow.repository_url, "latest"])
+  image  = join(":", [var.ecr_repository_url, "latest"])
       cpu    = 1024
       memory = 2048
       portMappings = [
@@ -120,7 +120,7 @@ resource "aws_ecs_task_definition" "airflow_webserver" {
 resource "aws_security_group" "airflow_webserver_service" {
   name_prefix = "airflow-webserver-service-"
   description = "Allow HTTP inbound traffic from load balancer"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = var.vpc_id
   ingress {
     description     = "HTTP from load balancer"
     from_port       = 8080
@@ -140,7 +140,7 @@ resource "aws_ecs_service" "airflow_webserver" {
   name = "airflow-webserver"
   # Note: If a revision number is not specified, the latest ACTIVE revision is used.
   task_definition = aws_ecs_task_definition.airflow_webserver.family
-  cluster         = aws_ecs_cluster.airflow.arn
+  cluster         = var.ecs_cluster_arn
   deployment_controller {
     type = "ECS"
   }
@@ -153,7 +153,7 @@ resource "aws_ecs_service" "airflow_webserver" {
   enable_execute_command = true
   launch_type            = "FARGATE"
   network_configuration {
-    subnets = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+    subnets = var.public_subnet_ids
     # In order for a Fargate task to pull the container image, it must either
     #  1. use a public subnet and be assigned a public IP address
     #  2. use a private subnet that has a route to the internet or a NAT gateway
@@ -183,7 +183,7 @@ resource "aws_ecs_service" "airflow_webserver" {
 resource "aws_appautoscaling_target" "airflow_webserver" {
   max_capacity       = 1
   min_capacity       = 0
-  resource_id        = "service/${aws_ecs_cluster.airflow.name}/${aws_ecs_service.airflow_webserver.name}"
+  resource_id        = "service/${var.ecs_cluster_name}/${aws_ecs_service.airflow_webserver.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
 }

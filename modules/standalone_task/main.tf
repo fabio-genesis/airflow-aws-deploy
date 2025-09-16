@@ -2,8 +2,8 @@ resource "aws_kinesis_firehose_delivery_stream" "airflow_standalone_task_stream"
   name        = "deploy-airflow-on-ecs-fargate-airflow-standalone-task-stream"
   destination = "extended_s3"
   extended_s3_configuration {
-    role_arn            = aws_iam_role.airflow_firehose.arn
-    bucket_arn          = aws_s3_bucket.airflow.arn
+  role_arn            = var.firehose_role_arn
+  bucket_arn          = var.s3_bucket_arn
     prefix              = "kinesis-firehose/airflow-standalone-task/"
     error_output_prefix = "kinesis-firehose/airflow-standalone-task-error-output/"
   }
@@ -20,7 +20,7 @@ resource "aws_cloudwatch_log_group" "airflow_standalone_task_fluentbit" {
 resource "aws_security_group" "airflow_standalone_task" {
   name        = "airflow-standalone-task"
   description = "Deny all incoming traffic"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = var.vpc_id
   egress {
     from_port   = 0
     to_port     = 0
@@ -35,8 +35,8 @@ resource "aws_ecs_task_definition" "airflow_standalone_task" {
   family             = "airflow-standalone-task"
   cpu                = 256
   memory             = 512
-  execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn      = aws_iam_role.airflow_task.arn
+  execution_role_arn = var.task_execution_role_arn
+  task_role_arn      = var.task_role_arn
   network_mode       = "awsvpc"
   runtime_platform {
     operating_system_family = "LINUX"
@@ -46,7 +46,7 @@ resource "aws_ecs_task_definition" "airflow_standalone_task" {
   container_definitions = jsonencode([
     {
       name        = "airflow"
-      image       = join(":", [aws_ecr_repository.airflow.repository_url, "latest"])
+  image       = join(":", [var.ecr_repository_url, "latest"])
       cpu         = 256
       memory      = 512
       essential   = true
@@ -80,7 +80,7 @@ resource "aws_ecs_task_definition" "airflow_standalone_task" {
     {
       name      = "fluentbit"
       essential = true
-  image     = var.fluentbit_image,
+  image     = var.fluentbit_image
       firelensConfiguration = {
         type = "fluentbit"
       }

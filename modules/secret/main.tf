@@ -17,7 +17,7 @@ resource "aws_secretsmanager_secret" "sql_alchemy_conn" {
 
 resource "aws_secretsmanager_secret_version" "sql_alchemy_conn" {
   secret_id     = aws_secretsmanager_secret.sql_alchemy_conn.id
-  secret_string = "postgresql+psycopg2://${aws_db_instance.airflow_metadata_db.username}:${aws_db_instance.airflow_metadata_db.password}@${aws_db_instance.airflow_metadata_db.address}:${aws_db_instance.airflow_metadata_db.port}/${aws_db_instance.airflow_metadata_db.db_name}"
+  secret_string = "postgresql+psycopg2://${var.db_user}:${var.db_pass}@${var.db_address}:${var.db_port}/${var.db_name}"
 }
 
 resource "aws_secretsmanager_secret" "celery_result_backend" {
@@ -26,5 +26,5 @@ resource "aws_secretsmanager_secret" "celery_result_backend" {
 
 resource "aws_secretsmanager_secret_version" "celery_result_backend" {
   secret_id     = aws_secretsmanager_secret.celery_result_backend.id
-  secret_string = "db+postgresql://${aws_db_instance.airflow_metadata_db.username}:${aws_db_instance.airflow_metadata_db.password}@${aws_db_instance.airflow_metadata_db.address}:${aws_db_instance.airflow_metadata_db.port}/${aws_db_instance.airflow_metadata_db.db_name}"
+  secret_string = "db+postgresql://${var.db_user}:${var.db_pass}@${var.db_address}:${var.db_port}/${var.db_name}"
 }

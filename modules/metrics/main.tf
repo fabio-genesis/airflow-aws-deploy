@@ -15,7 +15,7 @@ resource "aws_cloudwatch_log_group" "airflow_metrics" {
 resource "aws_security_group" "airflow_metrics_service" {
   name_prefix = "airflow-metrics-"
   description = "Deny all incoming traffic"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = var.vpc_id
   egress {
     from_port   = 0
     to_port     = 0
@@ -28,8 +28,8 @@ resource "aws_ecs_task_definition" "airflow_metrics" {
   family             = "airflow-metrics"
   cpu                = 256
   memory             = 512
-  execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn      = aws_iam_role.airflow_task.arn
+  execution_role_arn = var.task_execution_role_arn
+  task_role_arn      = var.task_role_arn
   network_mode       = "awsvpc"
   runtime_platform {
     operating_system_family = "LINUX"
@@ -39,7 +39,7 @@ resource "aws_ecs_task_definition" "airflow_metrics" {
   container_definitions = jsonencode([
     {
       name      = "metrics"
-      image     = join(":", [aws_ecr_repository.airflow.repository_url, "latest"])
+  image     = join(":", [var.ecr_repository_url, "latest"])
       cpu       = 256
       memory    = 512
       essential = true
@@ -51,13 +51,13 @@ resource "aws_ecs_task_definition" "airflow_metrics" {
         "--namespace",
         local.airflow_worker_autoscaling_metric.namespace,
         "--cluster-name",
-        aws_ecs_cluster.airflow.name,
+  var.ecs_cluster_name,
         "--metric-name",
         local.airflow_worker_autoscaling_metric.metric_name,
         "--metric-unit",
         local.airflow_worker_autoscaling_metric.metric_unit,
-        "--worker-service-name",
-        aws_ecs_service.airflow_worker.name,
+  "--worker-service-name",
+  var.worker_service_name,
         "--region-name",
         var.aws_region,
         "--period",
@@ -80,7 +80,7 @@ resource "aws_ecs_task_definition" "airflow_metrics" {
 resource "aws_ecs_service" "airflow_metrics" {
   name            = "airflow-metrics"
   task_definition = aws_ecs_task_definition.airflow_metrics.family
-  cluster         = aws_ecs_cluster.airflow.arn
+  cluster         = var.ecs_cluster_arn
   deployment_controller {
     type = "ECS"
   }
@@ -89,7 +89,7 @@ resource "aws_ecs_service" "airflow_metrics" {
   desired_count                      = 1
   launch_type                        = "FARGATE"
   network_configuration {
-    subnets          = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+    subnets          = var.public_subnet_ids
     assign_public_ip = true
     security_groups  = [aws_security_group.airflow_metrics_service.id]
   }

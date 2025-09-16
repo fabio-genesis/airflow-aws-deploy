@@ -35,8 +35,8 @@ resource "aws_iam_policy" "airflow_firehose" {
           "s3:PutObject"
         ],
         Resource = [
-          aws_s3_bucket.airflow.arn,
-          "${aws_s3_bucket.airflow.arn}/*",
+          var.s3_bucket_arn,
+          "${var.s3_bucket_arn}/*",
         ]
       }
     ]

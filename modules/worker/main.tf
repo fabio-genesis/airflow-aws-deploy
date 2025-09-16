@@ -1,3 +1,11 @@
+locals {
+  airflow_worker_autoscaling_metric = {
+    namespace                    = "DeployAirflowOnECSFargate"
+    metric_name                  = "CapacityProviderReservation"
+    target_tracking_target_value = 100
+  }
+}
+
 # Send worker logs to this Cloud Watch log group
 resource "aws_cloudwatch_log_group" "airflow_worker" {
   name_prefix       = "/deploy-airflow-on-ecs-fargate/airflow-worker/"
@@ -8,8 +16,8 @@ resource "aws_ecs_task_definition" "airflow_worker" {
   family             = "airflow-worker"
   cpu                = 1024
   memory             = 2048
-  execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn      = aws_iam_role.airflow_task.arn
+  execution_role_arn = var.task_execution_role_arn
+  task_role_arn      = var.task_role_arn
   network_mode       = "awsvpc"
   runtime_platform {
     operating_system_family = "LINUX"
@@ -19,7 +27,7 @@ resource "aws_ecs_task_definition" "airflow_worker" {
   container_definitions = jsonencode([
     {
       name      = "worker"
-      image     = join(":", [aws_ecr_repository.airflow.repository_url, "latest"])
+  image     = join(":", [var.ecr_repository_url, "latest"])
       cpu       = 1024
       memory    = 2048
       essential = true
@@ -54,7 +62,7 @@ resource "aws_ecs_task_definition" "airflow_worker" {
 resource "aws_security_group" "airflow_worker_service" {
   name_prefix = "airflow-worker-"
   description = "Deny all incoming traffic"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = var.vpc_id
   egress {
     from_port   = 0
     to_port     = 0
@@ -66,7 +74,7 @@ resource "aws_security_group" "airflow_worker_service" {
 resource "aws_ecs_service" "airflow_worker" {
   name            = "airflow-worker"
   task_definition = aws_ecs_task_definition.airflow_worker.family
-  cluster         = aws_ecs_cluster.airflow.arn
+  cluster         = var.ecs_cluster_arn
   deployment_controller {
     type = "ECS"
   }
@@ -80,7 +88,7 @@ resource "aws_ecs_service" "airflow_worker" {
   }
   enable_execute_command = true
   network_configuration {
-    subnets          = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+    subnets          = var.public_subnet_ids
     assign_public_ip = true
     security_groups  = [aws_security_group.airflow_worker_service.id]
   }
@@ -96,7 +104,7 @@ resource "aws_ecs_service" "airflow_worker" {
 resource "aws_appautoscaling_target" "airflow_worker" {
   max_capacity       = 5
   min_capacity       = 0
-  resource_id        = "service/${aws_ecs_cluster.airflow.name}/${aws_ecs_service.airflow_worker.name}"
+  resource_id        = "service/${var.ecs_cluster_name}/${aws_ecs_service.airflow_worker.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
 }
@@ -120,7 +128,7 @@ resource "aws_appautoscaling_policy" "airflow_worker" {
       statistic   = "Average"
       dimensions {
         name  = "ClusterName"
-        value = aws_ecs_cluster.airflow.name
+  value = var.ecs_cluster_name
       }
     }
   }

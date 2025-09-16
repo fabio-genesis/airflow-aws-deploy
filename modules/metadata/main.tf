@@ -2,7 +2,7 @@
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/db_subnet_group
 resource "aws_db_subnet_group" "airflow_metadata_db" {
   name_prefix = "airflow-metadata-db-"
-  subnet_ids  = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+  subnet_ids  = var.private_subnet_ids
 }
 
 # A security group to attach to our RDS instance.
@@ -11,18 +11,12 @@ resource "aws_db_subnet_group" "airflow_metadata_db" {
 resource "aws_security_group" "airflow_metadata_db" {
   name_prefix = "airflow-metadata-db-"
   description = "Allow inbound traffic to RDS from ECS"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = var.vpc_id
   ingress {
     from_port = var.metadata_db.port
     to_port   = var.metadata_db.port
     protocol  = "tcp"
-    security_groups = [
-      aws_security_group.airflow_webserver_service.id,
-      aws_security_group.airflow_scheduler_service.id,
-      aws_security_group.airflow_worker_service.id,
-      aws_security_group.airflow_standalone_task.id,
-      aws_security_group.airflow_metrics_service.id
-    ]
+    security_groups = var.allowed_security_group_ids
   }
   egress {
     from_port   = 0
