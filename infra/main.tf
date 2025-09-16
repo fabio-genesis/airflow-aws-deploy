@@ -19,7 +19,6 @@ module "app" {
   vpc_id              = module.network.vpc_id
   private_subnet_ids  = module.network.private_subnet_ids
   airflow_bucket_name = var.airflow_bucket_name
-  airflow_bucket_arn  = var.airflow_bucket_arn
   db_address          = module.database.db_address
   db_port             = module.database.db_port
   db_name             = module.database.db_name

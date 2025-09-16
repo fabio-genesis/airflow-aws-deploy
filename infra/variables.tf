@@ -24,7 +24,3 @@ variable "airflow_bucket_name" {
   description = "Nome do bucket S3 do Airflow."
 }
 
-variable "airflow_bucket_arn" {
-  type        = string
-  description = "ARN do bucket S3 do Airflow."
-}
