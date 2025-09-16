@@ -44,8 +44,8 @@ def get_task_count_where_state(states: List[str]) -> int:
             session.query(func.sum(tasks_query.c.count))
             .join(DagModel, DagModel.dag_id == tasks_query.c.dag_id)
             .filter(
-                DagModel.is_active == True,
-                DagModel.is_paused == False,
+                DagModel.is_active,
+                ~DagModel.is_paused,
             )
             .scalar()
         )
@@ -65,12 +65,14 @@ def get_capacity_provider_reservation(
     M is the number of instances you need.
     N is the number of instances already up and running.
 
-    If M and N are both zero, meaning no instances and no running tasks, then
-    CapacityProviderReservation = 100. If M > 0 and N = 0, meaning no instances and no
-    running tasks, but at least one required task, then CapacityProviderReservation = 200.
+    If M and N are both zero, meaning no instances and no running tasks,
+    then CapacityProviderReservation = 100.
+    If M > 0 and N == 0, meaning no instances and no running tasks,
+    but at least one required task, then CapacityProviderReservation = 200.
 
-    The return value unit is a percentage. Scale airflow workers by applying this metric
-    in a target tracking scaling policy with a target value of 100.
+    The return value unit is a percentage.
+    Scale airflow workers by applying this metric in a target tracking scaling policy
+    with a target value of 100.
 
     Source:
     https://aws.amazon.com/blogs/containers/deep-dive-on-amazon-ecs-cluster-auto-scaling/
@@ -88,7 +90,12 @@ def get_capacity_provider_reservation(
 # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/publishingMetrics.html
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--namespace", type=str, required=True, help="Metric namespace")
+    parser.add_argument(
+        "--namespace",
+        type=str,
+        required=True,
+        help="Metric namespace"
+    )
     parser.add_argument(
         "--cluster-name",
         type=str,
@@ -116,20 +123,29 @@ if __name__ == "__main__":
     logging.info("Arguments parsed successfully")
 
     session = botocore.session.get_session()
-    cloudwatch = session.create_client("cloudwatch", region_name=args.region_name)
+    cloudwatch = session.create_client(
+        "cloudwatch",
+        region_name=args.region_name
+    )
     ecs = session.create_client("ecs", region_name=args.region_name)
 
     while True:
-        task_count = get_task_count_where_state(states=[State.QUEUED, State.RUNNING])
+        task_count = get_task_count_where_state(
+            states=[State.QUEUED, State.RUNNING]
+        )
         logging.info(f"NumberOfActiveRunningTasks: {task_count}")
 
         worker_service = ecs.describe_services(
             cluster=args.cluster_name, services=[args.worker_service_name]
         )["services"][0]
-        worker_count = worker_service["pendingCount"] + worker_service["runningCount"]
+        worker_count = (
+            worker_service["pendingCount"] + worker_service["runningCount"]
+        )
         logging.info(f"NumberOfWorkers: {worker_count}")
 
-        metric_value = get_capacity_provider_reservation(task_count, worker_count, 5)
+        metric_value = get_capacity_provider_reservation(
+            task_count, worker_count, 5
+        )
         logging.info(f"{args.metric_name}: {metric_value}")
 
         # We scale airflow workers based on this metric.

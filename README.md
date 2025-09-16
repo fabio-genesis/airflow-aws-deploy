@@ -1,182 +1,127 @@
-# Deploying Apache Airflow on AWS ECS Fargate
+# Airflow on ECS Fargate – Deploy Modular
 
-## Project Overview
-This project provides a modularized Terraform configuration to deploy Apache Airflow on AWS ECS Fargate. It leverages various AWS services such as ECS, ECR, S3, IAM, Secrets Manager, and RDS to create a scalable and secure environment for running Airflow workflows.
+Este projeto demonstra como implantar o [Apache Airflow](https://airflow.apache.org/) no Amazon ECS Fargate usando infraestrutura modular com Terraform, Docker e CI/CD.
 
-## Repository Structure
+---
+
+## Estrutura do Projeto
+
 ```
-.
-├── dags/                          # Directory for Airflow DAGs
-│   └── our_first_dag.py           # Example DAG
-├── deploy_airflow_on_ecs_fargate/ # Python scripts for deployment
-│   ├── __init__.py
-│   ├── celery_config.py
-│   └── logging_config.py
-├── docker/                        # Docker configuration files
-│   ├── airflow.cfg
-│   ├── Containerfile
-│   └── requirements.txt
-├── modules/                       # Terraform modules
-│   ├── athena/
-│   ├── celery/
-│   ├── ecr/
-│   ├── ecs/
-│   ├── iam/
-│   ├── kinesis/
-│   ├── metadata/
-│   ├── metrics/
-│   ├── scheduler/
-│   ├── secret/
-│   ├── standalone_task/
-│   ├── storage/
-│   ├── vpc/
-│   ├── webserver/
-│   └── worker/
-├── scripts/                       # Utility scripts
-│   ├── put_airflow_worker_autoscaling_metric_data.py
-│   └── run_task.py
-├── docker-compose.yml             # Docker Compose configuration
-├── main.tf                        # Root Terraform configuration
-├── Makefile                       # Makefile for common tasks
-├── provider.tf                    # Terraform provider configuration
-├── README.md                      # Project documentation
-├── terraform.tfvars               # Terraform variables
-└── variables.tf                   # Terraform variable definitions
-```
-
-## Prerequisites
-- Terraform >= 1.5.0
-- AWS CLI configured with appropriate credentials
-- Docker installed and running
-
-## Setup Instructions
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/fabio-genesis/airflow-aws-deploy.git
-cd airflow-aws-deploy
+├── infra/           # Infraestrutura modular (Terraform)
+│   ├── main.tf
+│   ├── providers.tf
+│   ├── variables.tf
+│   ├── versions.tf
+│   ├── README.md
+│   └── modules/
+│       ├── network/
+│       ├── database/
+│       └── app/
+├── app/             # Código do Airflow
+│   ├── dags/
+│   ├── plugins/
+│   ├── deploy_pkg/
+│   └── requirements/
+├── containers/
+│   └── prod/
+│       ├── Dockerfile
+│       └── airflow.env.template
+├── scripts/
+│   ├── build_image.sh
+│   ├── push_ecr.sh
+│   ├── run_task.py
+│   └── put_airflow_worker_autoscaling_metric_data.py
+├── ci/
+│   ├── terraform_plan_apply.yml
+│   ├── docker_build_push.yml
+│   └── lint_test.yml
+├── ops/
+│   ├── README.md
+│   └── runbooks/
+├── .env.example
+├── .gitignore
+├── Makefile
+└── README.md
 ```
 
-### 2. Configure Variables
-Update the `terraform.tfvars` file with your specific values:
-```hcl
-fernet_key = "<your_fernet_key>"
-metadata_db = {
-  host     = "<db_host>"
-  port     = <db_port>
-  username = "<db_username>"
-  password = "<db_password>"
-  database = "<db_name>"
-}
+---
+
+## Instalação e Deploy
+
+### 1. Pré-requisitos
+
+- [Terraform](https://www.terraform.io/downloads.html) >= 0.13.1
+- [Docker](https://docs.docker.com/get-docker/)
+- AWS CLI configurado (`~/.aws/credentials`)
+- Python 3.9+ (para scripts utilitários)
+
+### 2. Configurar variáveis
+
+Edite `.env.example` e copie para `.env` com seus valores (sem segredos em produção).
+
+Edite `containers/prod/airflow.env.template` conforme seu ambiente.
+
+### 3. Inicializar e validar infraestrutura
+
+```sh
+terraform -chdir=infra init
+terraform -chdir=infra validate
+terraform -chdir=infra plan
 ```
 
-### 3. Initialize Terraform
-```bash
-terraform init
+### 4. Construir e enviar imagem Docker
+
+```sh
+make build-prod
+export REPO_URI=<uri-do-seu-ecr>
+make push
 ```
 
-### 4. Validate Configuration
-```bash
-terraform validate
+### 5. Aplicar infraestrutura
+
+```sh
+terraform -chdir=infra apply
 ```
 
-### 5. Deploy Infrastructure
-```bash
-terraform apply
+### 6. Inicializar banco de metadados e criar usuário admin
+
+```sh
+python3 scripts/run_task.py --profile <aws-profile> --wait-tasks-stopped --command 'db init'
+python3 scripts/run_task.py --profile <aws-profile> --wait-tasks-stopped --command "users create --username airflow --firstname airflow --lastname airflow --password airflow --email airflow@example.com --role Admin"
 ```
 
-### 6. Access Airflow
-Once the deployment is complete, access the Airflow webserver using the URL provided in the Terraform output.
+### 7. Acessar Airflow
 
-### Construindo e Enviando a Imagem Docker do Airflow
+Recupere o DNS do Load Balancer via AWS CLI:
 
-Para implantar o Apache Airflow no AWS ECS Fargate, é necessário construir e enviar uma imagem Docker customizada para um repositório no Amazon Elastic Container Registry (ECR). Siga os passos abaixo:
-
-#### 1. Criar o Repositório ECR
-O repositório ECR é gerenciado pelo módulo `ecr` do Terraform. Para criá-lo, execute:
-
-```powershell
-$env:AWS_PROFILE = "ons-dg-00-dev"
-$env:AWS_REGION = "us-east-1"
-$env:AWS_DEFAULT_REGION = "us-east-1"
-terraform apply -target=module.ecr
+```sh
+aws elbv2 describe-load-balancers --query "LoadBalancers[?contains(LoadBalancerName, 'airflow-webserver')].DNSName | [0]" --output text
 ```
 
-#### 2. Recuperar a URI do Repositório
-Use o AWS CLI para obter a URI do repositório ECR:
+---
 
-```powershell
-$ACCOUNT_ID = (aws sts get-caller-identity --query Account --output text)
-$REGION = if ($env:AWS_REGION) { $env:AWS_REGION } else { "us-east-1" }
-$REPO_URI = (aws ecr describe-repositories --query "repositories[?repositoryName=='deploy-airflow-on-ecs-fargate-airflow'].repositoryUri" --output text)
-$REPO_URI
-```
+## CI/CD
 
-#### 3. Autenticar o Docker no ECR
-Autentique o Docker para enviar imagens ao repositório ECR:
+- Workflows básicos em [`ci/`](ci/) para validação Terraform, build/push Docker e lint/test Python.
+- Use o [Makefile](Makefile) para comandos padronizados.
 
-```powershell
-aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com"
-```
+---
 
-#### 4. Construir e Enviar a Imagem Docker
-Construa a imagem Docker usando o arquivo `docker/Containerfile` e envie-a para o repositório ECR:
+## Operação
 
-```powershell
-if (-not $REPO_URI) {
-  $REPO_URI = "$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/deploy-airflow-on-ecs-fargate-airflow"
-}
-docker buildx build -t "${REPO_URI}" -f docker/Containerfile --platform linux/amd64 .
-docker push "${REPO_URI}"
-```
+Consulte [`ops/README.md`](ops/README.md) para procedimentos operacionais e futuros runbooks.
 
-#### 5. Implantar o Restante da Infraestrutura
-Depois que a imagem Docker for enviada, implante o restante da infraestrutura:
+---
 
-```powershell
-terraform apply
-```
+## Observações
 
-#### 6. Inicializar o Banco de Dados de Metadados do Airflow
-Você pode inicializar o banco de dados de metadados do Airflow de duas formas:
+- Não inclua segredos em arquivos versionados.
+- Após validação, remova qualquer pasta antiga fora do padrão atual.
+- Para dúvidas sobre módulos, veja [`infra/README.md`](infra/README.md).
 
-- **Opção A**: Automaticamente durante o primeiro start do scheduler, adicionando o comando `airflow db upgrade` ao entrypoint.
-- **Opção B**: Manualmente usando o ECS Exec após o deploy inicial:
+---
 
-```powershell
-py -3 scripts/run_task.py --profile $env:AWS_PROFILE --wait-tasks-stopped --command 'db init'
-```
+## Referências
 
-Após inicializar o banco de dados, crie o usuário admin:
-
-```powershell
-py -3 scripts/run_task.py --profile $env:AWS_PROFILE --wait-tasks-stopped --command "users create --username airflow --firstname airflow --lastname airflow --password airflow --email airflow@example.com --role Admin"
-```
-
-#### 7. Acessar o Webserver do Airflow
-Recupere o DNS do Load Balancer para o webserver do Airflow:
-
-```powershell
-aws elbv2 describe-load-balancers --query "LoadBalancers[?contains(LoadBalancerName, 'airflow-webserver')].DNSName | [0]" --output text --profile $env:AWS_PROFILE
-```
-
-Abra o DNS no navegador para acessar a interface web do Airflow.
-
-## Módulos
-Este projeto é modularizado para flexibilidade e reutilização. Abaixo estão os principais módulos:
-- **Athena**: Configura consultas e saídas do Athena.
-- **IAM**: Gerencia funções e políticas do IAM.
-- **Kinesis**: Configura o Kinesis Firehose para streaming de dados.
-- **Secret**: Gerencia segredos no AWS Secrets Manager.
-- **Metadata**: Configura o banco de dados de metadados.
-- **Webserver, Scheduler, Worker**: Implanta os componentes do Airflow no ECS Fargate.
-- **Metrics**: Configura monitoramento e métricas.
-- **Standalone Task**: Configura tarefas ECS independentes.
-
-## Solução de Problemas
-- **Erros de Validação**: Certifique-se de que todas as variáveis necessárias estão definidas no arquivo `terraform.tfvars`.
-- **Problemas com a Fernet Key**: A `fernet_key` deve ser uma string codificada em base64 com 32 caracteres.
-- **Formato do Metadata DB**: Certifique-se de que o objeto `metadata_db` corresponde ao formato esperado.
-
-## Licença
-Este projeto está licenciado sob a Licença MIT. Consulte o arquivo LICENSE para mais detalhes.
+- [Documentação oficial Airflow](https://airflow.apache.org/docs/)
+- [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
