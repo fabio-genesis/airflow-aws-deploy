@@ -135,6 +135,10 @@ resource "aws_ecs_service" "web" {
     enable   = true
     rollback = false
   }
+    timeouts {
+      create = "5m"
+      update = "5m"
+    }
 }
 
 resource "aws_ecs_service" "worker" {
@@ -154,6 +158,10 @@ resource "aws_ecs_service" "worker" {
     enable   = true
     rollback = false
   }
+    timeouts {
+      create = "5m"
+      update = "5m"
+    }
 }
 
 # CloudWatch Log Group for webserver
@@ -188,6 +196,7 @@ resource "aws_ecs_task_definition" "airflow_webserver" {
   cpu                = 1024
   memory             = 2048
   execution_role_arn = aws_iam_role.task_execution.arn
+  task_role_arn      = aws_iam_role.task_execution.arn
   network_mode       = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   container_definitions = jsonencode([
@@ -268,6 +277,10 @@ resource "aws_ecs_service" "airflow_webserver" {
     enable   = true
     rollback = false
   }
+    timeouts {
+      create = "5m"
+      update = "5m"
+    }
 }
 
 # Autoscaling Target
