@@ -72,3 +72,59 @@ resource "aws_security_group" "base" {
     Name = "airflow-base-sg"
   }
 }
+
+# Security Group for ALB
+resource "aws_security_group" "airflow_webserver_alb" {
+  name_prefix = "airflow-webserver-alb-"
+  description = "Allow TLS inbound traffic"
+  vpc_id      = aws_vpc.this.id
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Application Load Balancer
+resource "aws_lb" "airflow_webserver" {
+  name               = "airflow-webserver"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.airflow_webserver_alb.id]
+  subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+  ip_address_type    = "ipv4"
+}
+
+# Target Group
+resource "aws_lb_target_group" "airflow_webserver" {
+  name        = "airflow-webserver"
+  port        = 8080
+  protocol    = "HTTP"
+  target_type = "ip"
+  vpc_id      = aws_vpc.this.id
+  health_check {
+    enabled = true
+    path    = "/health"
+    interval            = 30
+    timeout             = 10
+    unhealthy_threshold = 5
+  }
+}
+
+# Listener
+resource "aws_lb_listener" "airflow_webserver" {
+  load_balancer_arn = aws_lb.airflow_webserver.arn
+  port              = "80"
+  protocol          = "HTTP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.airflow_webserver.arn
+  }
+}

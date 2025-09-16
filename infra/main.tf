@@ -24,4 +24,10 @@ module "app" {
   db_name             = module.database.db_name
   db_username         = module.database.db_username
   db_password         = var.db_password
+  alb_sg_id           = module.network.alb_sg_id
+  public_subnet_ids   = module.network.public_subnet_ids
+  webserver_tg_arn    = module.network.webserver_tg_arn
+  aws_region          = var.aws_region
+  force_new_ecs_service_deployment = true
+  airflow_task_common_environment = []
 }
