@@ -23,9 +23,8 @@ Este projeto demonstra como implantar o [Apache Airflow](https://airflow.apache.
 │   ├── deploy_pkg/
 │   └── requirements/
 ├── containers/
-│   └── prod/
-│       ├── Dockerfile
-│       └── airflow.env.template
+│   ├── Dockerfile
+│   └── airflow.env.template
 ├── scripts/
 │   ├── build_image.sh
 │   ├── push_ecr.sh
@@ -59,7 +58,7 @@ Este projeto demonstra como implantar o [Apache Airflow](https://airflow.apache.
 
 Edite `.env.example` e copie para `.env` com seus valores (sem segredos em produção).
 
-Edite `containers/prod/airflow.env.template` conforme seu ambiente.
+Edite `containers/airflow.env.template` conforme seu ambiente.
 
 ### 3. Inicializar e validar infraestrutura
 
