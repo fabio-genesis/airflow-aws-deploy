@@ -1,0 +1,23 @@
+FROM apache/airflow:2.8.1-python3.9
+
+USER root
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends gcc libc6-dev libcurl4-openssl-dev libssl-dev \
+  && apt-get autoremove -yqq --purge \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+
+# Se seu requirements está em build/prod
+COPY --chown=airflow:airflow build/prod/requirements.txt "${AIRFLOW_HOME}/requirements.txt"
+
+USER airflow
+RUN pip install --upgrade pip \
+  && pip install --no-cache-dir -r requirements.txt -c "https://raw.githubusercontent.com/apache/airflow/constraints-2.8.1/constraints-3.9.txt"
+
+COPY --chown=airflow:airflow dags "${AIRFLOW_HOME}/dags"
+COPY --chown=airflow:airflow plugins "${AIRFLOW_HOME}/plugins"
+COPY --chown=airflow:airflow deploy_airflow_on_ecs_fargate "${AIRFLOW_HOME}/deploy_airflow_on_ecs_fargate"
+COPY --chown=airflow:airflow build/prod/airflow.cfg "${AIRFLOW_HOME}/airflow.cfg"
+COPY --chown=airflow:airflow scripts "${AIRFLOW_HOME}/scripts"
+
+ENV PYTHONPATH="${AIRFLOW_HOME}/deploy_airflow_on_ecs_fargate:${PYTHONPATH}"
