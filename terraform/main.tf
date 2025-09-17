@@ -3,8 +3,8 @@ module "networking" {
 }
 
 module "s3" {
-  source      = "./modules/s3"
-  bucket_name = var.airflow_bucket_name
+  source              = "./modules/s3"
+  airflow_bucket_name = var.airflow_bucket_name
 }
 
 module "rds" {

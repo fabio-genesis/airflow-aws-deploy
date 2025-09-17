@@ -7,10 +7,31 @@ Este repositório contém a infraestrutura como código (IaC) para implantar o A
 A arquitetura deste projeto inclui:
 
 - **Amazon ECS (Fargate)**: Para executar o Airflow em contêineres sem a necessidade de gerenciar servidores
+  - **Webserver**: Interface web do Airflow (porta 8080)
+  - **Scheduler**: Agendador de tarefas do Airflow
 - **Amazon RDS (PostgreSQL)**: Para o banco de dados do Airflow
 - **Amazon S3**: Para armazenar as DAGs do Airflow
 - **Amazon VPC**: Com sub-redes públicas e privadas
 - **Amazon ECR**: Para armazenar a imagem personalizada do Airflow
+- **Application Load Balancer**: Para distribuir tráfego para o webserver
+
+## Melhorias Recentes
+
+Este repositório foi atualizado com as seguintes correções críticas:
+
+### ✅ Problemas Corrigidos
+- **Docker Entrypoint**: Corrigido loop infinito que impedia a inicialização do Airflow
+- **Dependências**: Corrigido caminho do requirements.txt e adicionadas dependências essenciais
+- **Inicialização do Banco**: Adicionada inicialização automática do banco de dados do Airflow
+- **Separação de Serviços**: Webserver e Scheduler agora executam em serviços ECS separados
+- **Health Checks**: Adicionados health checks para monitoramento adequado
+- **Tratamento de Erros**: Melhorado tratamento de erros no script de inicialização
+- **Sincronização S3**: Aprimorada sincronização de DAGs do S3 com tratamento de erros
+
+### 🔧 Componentes Principais
+- **Webserver**: Responsável pela interface web (http://load-balancer-dns)
+- **Scheduler**: Responsável pelo agendamento e execução de tarefas
+- **Sincronização S3**: Sincronização automática de DAGs a cada 30 segundos
 
 ## Pré-requisitos
 

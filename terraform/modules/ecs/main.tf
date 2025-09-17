@@ -103,8 +103,8 @@ resource "aws_ecs_cluster" "airflow" {
   }
 }
 
-resource "aws_ecs_task_definition" "airflow" {
-  family                   = "airflow"
+resource "aws_ecs_task_definition" "airflow_webserver" {
+  family                   = "airflow-webserver"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "1024"
@@ -114,9 +114,10 @@ resource "aws_ecs_task_definition" "airflow" {
 
   container_definitions = jsonencode([
     {
-      name      = "airflow"
+      name      = "airflow-webserver"
       image     = var.aws_ecr_repository
       essential = true
+      command   = ["webserver"]
       
       environment = [
         { name = "AIRFLOW__CORE__EXECUTOR", value = "LocalExecutor" },
@@ -128,23 +129,31 @@ resource "aws_ecs_task_definition" "airflow" {
         { name = "AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION", value = "false" },
         { name = "AIRFLOW_S3_BUCKET", value = var.s3_bucket_name },
         { name = "AIRFLOW_S3_DAGS_PATH", value = "dags" },
-        { name = "AIRFLOW__WEBSERVER__BASE_URL", value = "http://localhost:8080" }
+        { name = "AIRFLOW__WEBSERVER__EXPOSE_CONFIG", value = "true" },
+        { name = "AIRFLOW__WEBSERVER__RBAC", value = "true" }
       ],
       
       portMappings = [
         {
           containerPort = 8080
-          hostPort      = 8080
           protocol      = "tcp"
         }
       ],
+      
+      healthCheck = {
+        command = ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+        interval = 30
+        timeout = 5
+        retries = 3
+        startPeriod = 60
+      },
       
       logConfiguration = {
         logDriver = "awslogs"
         options = {
           "awslogs-group"         = "/ecs/airflow"
           "awslogs-region"        = "us-east-1"
-          "awslogs-stream-prefix" = "ecs"
+          "awslogs-stream-prefix" = "webserver"
           "awslogs-create-group"  = "true"
         }
       }
@@ -152,10 +161,51 @@ resource "aws_ecs_task_definition" "airflow" {
   ])
 }
 
-resource "aws_ecs_service" "airflow" {
-  name            = "airflow-service"
+resource "aws_ecs_task_definition" "airflow_scheduler" {
+  family                   = "airflow-scheduler"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = var.iam_role_ecs
+  task_role_arn            = var.iam_role_ecs
+
+  container_definitions = jsonencode([
+    {
+      name      = "airflow-scheduler"
+      image     = var.aws_ecr_repository
+      essential = true
+      command   = ["scheduler"]
+      
+      environment = [
+        { name = "AIRFLOW__CORE__EXECUTOR", value = "LocalExecutor" },
+        { name = "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN", value = var.db_connection_string },
+        { name = "AIRFLOW__CORE__FERNET_KEY", value = "46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=" },
+        { name = "AIRFLOW__CORE__LOAD_EXAMPLES", value = "false" },
+        { name = "AIRFLOW__CORE__DAGS_FOLDER", value = "/opt/airflow/dags" },
+        { name = "AIRFLOW_CONN_AWS_DEFAULT", value = "aws://" },
+        { name = "AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION", value = "false" },
+        { name = "AIRFLOW_S3_BUCKET", value = var.s3_bucket_name },
+        { name = "AIRFLOW_S3_DAGS_PATH", value = "dags" }
+      ],
+      
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/airflow"
+          "awslogs-region"        = "us-east-1"
+          "awslogs-stream-prefix" = "scheduler"
+          "awslogs-create-group"  = "true"
+        }
+      }
+    }
+  ])
+}
+
+resource "aws_ecs_service" "airflow_webserver" {
+  name            = "airflow-webserver-service"
   cluster         = aws_ecs_cluster.airflow.id
-  task_definition = aws_ecs_task_definition.airflow.arn
+  task_definition = aws_ecs_task_definition.airflow_webserver.arn
   desired_count   = 1
   launch_type     = "FARGATE"
 
@@ -167,9 +217,23 @@ resource "aws_ecs_service" "airflow" {
 
   load_balancer {
     target_group_arn = aws_lb_target_group.airflow.arn
-    container_name   = "airflow"
+    container_name   = "airflow-webserver"
     container_port   = 8080
   }
 
   depends_on = [aws_lb_listener.airflow]
+}
+
+resource "aws_ecs_service" "airflow_scheduler" {
+  name            = "airflow-scheduler-service"
+  cluster         = aws_ecs_cluster.airflow.id
+  task_definition = aws_ecs_task_definition.airflow_scheduler.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = var.private_subnet_ids
+    security_groups  = [aws_security_group.airflow_ecs.id]
+    assign_public_ip = false
+  }
 }

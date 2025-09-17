@@ -8,7 +8,12 @@ output "airflow_alb_dns" {
   value       = aws_lb.airflow.dns_name
 }
 
-output "airflow_service_name" {
-  description = "Nome do serviço ECS do Airflow"
-  value       = aws_ecs_service.airflow.name
+output "airflow_webserver_service_name" {
+  description = "Nome do serviço ECS do Airflow Webserver"
+  value       = aws_ecs_service.airflow_webserver.name
+}
+
+output "airflow_scheduler_service_name" {
+  description = "Nome do serviço ECS do Airflow Scheduler"
+  value       = aws_ecs_service.airflow_scheduler.name
 }

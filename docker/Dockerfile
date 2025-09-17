@@ -4,7 +4,7 @@ USER root
 # deps do sistema
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       build-essential default-libmysqlclient-dev libpq-dev awscli \
+       build-essential default-libmysqlclient-dev awscli curl \
     && apt-get autoremove -yqq --purge \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

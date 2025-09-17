@@ -1,5 +1,5 @@
 data "aws_s3_bucket" "airflow_bucket" {
-  bucket = var.bucket_name
+  bucket = var.airflow_bucket_name
 }
 
 resource "aws_s3_bucket_ownership_controls" "airflow_bucket" {
