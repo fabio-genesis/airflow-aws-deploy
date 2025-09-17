@@ -16,16 +16,17 @@ mkdir -p /opt/airflow/dags
 if [ -z "$AIRFLOW_S3_BUCKET" ] || [ -z "$AIRFLOW_S3_DAGS_PATH" ]; then
     echo "AVISO: AIRFLOW_S3_BUCKET ou AIRFLOW_S3_DAGS_PATH não definidos. Pulando sincronização S3."
 else
-    # Test AWS credentials and S3 access
-    if ! aws s3 ls s3://${AIRFLOW_S3_BUCKET}/${AIRFLOW_S3_DAGS_PATH}/ >/dev/null 2>&1; then
+    echo "[LOG] Testando acesso ao S3: aws s3 ls s3://${AIRFLOW_S3_BUCKET}/${AIRFLOW_S3_DAGS_PATH}/"
+    if ! aws s3 ls s3://${AIRFLOW_S3_BUCKET}/${AIRFLOW_S3_DAGS_PATH}/; then
         echo "AVISO: Não foi possível acessar S3. Continuando sem sincronização."
     else
+        echo "[LOG] Sincronizando DAGs do S3 (inicial): aws s3 sync s3://${AIRFLOW_S3_BUCKET}/${AIRFLOW_S3_DAGS_PATH}/ /opt/airflow/dags/"
         aws s3 sync s3://${AIRFLOW_S3_BUCKET}/${AIRFLOW_S3_DAGS_PATH}/ /opt/airflow/dags/ || echo "AVISO: Falha na sincronização inicial do S3"
         
-        # Configurar o watcher para sincronizar automaticamente as DAGs do S3
-        echo "Configurando sincronização automática de DAGs..."
+        echo "[LOG] Configurando sincronização automática de DAGs..."
         (
           while true; do
+            echo "[LOG] Sincronizando DAGs do S3 (loop): aws s3 sync s3://${AIRFLOW_S3_BUCKET}/${AIRFLOW_S3_DAGS_PATH}/ /opt/airflow/dags/ --delete"
             if aws s3 sync s3://${AIRFLOW_S3_BUCKET}/${AIRFLOW_S3_DAGS_PATH}/ /opt/airflow/dags/ --delete; then
                 echo "DAGs sincronizadas em $(date)"
             else
