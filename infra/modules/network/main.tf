@@ -12,6 +12,29 @@ resource "aws_internet_gateway" "this" {
   }
 }
 
+# Route Table for public subnets
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.this.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.this.id
+  }
+  tags = {
+    Name = "deploy-airflow-on-ecs-fargate-public"
+  }
+}
+
+# Associate public subnets with route table
+resource "aws_route_table_association" "public_a" {
+  subnet_id      = aws_subnet.public_a.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "public_b" {
+  subnet_id      = aws_subnet.public_b.id
+  route_table_id = aws_route_table.public.id
+}
+
 resource "aws_subnet" "public_a" {
   availability_zone       = "${var.aws_region}a"
   cidr_block              = "10.0.0.0/24"
@@ -111,7 +134,7 @@ resource "aws_lb_target_group" "airflow_webserver" {
   vpc_id      = aws_vpc.this.id
   health_check {
     enabled = true
-    path    = "/health"
+    path    = "/"
     interval            = 30
     timeout             = 10
     unhealthy_threshold = 5

@@ -1,2 +1,12 @@
-# Dependências base do Airflow
-apache-airflow==3.0.6
+# Dependências adicionais para produção
+boto3
+psycopg2-binary
+apache-airflow-providers-amazon
+apache-airflow-providers-postgres
+apache-airflow-providers-fab
+flask
+flask-session
+requests
+cryptography
+sqlalchemy
+alembic

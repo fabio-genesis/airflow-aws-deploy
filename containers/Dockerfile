@@ -18,4 +18,5 @@ COPY --chown=airflow:airflow app/dags "${AIRFLOW_HOME}/dags"
 COPY --chown=airflow:airflow app/plugins "${AIRFLOW_HOME}/plugins"
 COPY --chown=airflow:airflow app/deploy_pkg "${AIRFLOW_HOME}/deploy_pkg"
 
+
 ENV PYTHONPATH="${AIRFLOW_HOME}/deploy_pkg:${PYTHONPATH}"

@@ -48,6 +48,49 @@ resource "aws_security_group" "airflow_webserver_service" {
   }
 }
 
+# Security Group for database migration task
+resource "aws_security_group" "airflow_db_migrate" {
+  name_prefix = "airflow-db-migrate-"
+  description = "Allow outbound traffic to RDS for database migration"
+  vpc_id      = var.vpc_id
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Task Definition for database migration
+resource "aws_ecs_task_definition" "airflow_db_migrate" {
+  family             = "airflow-db-migrate"
+  cpu                = 512
+  memory             = 1024
+  execution_role_arn = var.iam_role_ecs
+  task_role_arn      = var.iam_role_ecs
+  network_mode       = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  container_definitions = jsonencode([
+    {
+      name   = "db-migrate"
+      image  = var.ecr_repository_url
+      cpu    = 512
+      memory = 1024
+      essential   = true
+      command     = ["airflow", "db", "migrate"]
+      environment = var.airflow_task_common_environment
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.airflow_webserver.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "airflow-db-migrate"
+        }
+      }
+    }
+  ])
+}
+
 # Task Definition for webserver
 resource "aws_ecs_task_definition" "airflow_webserver" {
   family             = "airflow-webserver"
@@ -60,7 +103,7 @@ resource "aws_ecs_task_definition" "airflow_webserver" {
   container_definitions = jsonencode([
     {
       name   = "webserver"
-      image  = var.aws_ecr_repository
+      image  = var.ecr_repository_url
       cpu    = 1024
       memory = 2048
       portMappings = [
@@ -69,31 +112,25 @@ resource "aws_ecs_task_definition" "airflow_webserver" {
           hostPort      = 8080
         }
       ]
-      healthcheck = {
-        command = [
-          "CMD",
-          "curl",
-          "--fail",
-          "http://localhost:8080/health"
-        ]
-        interval = 35
-        timeout  = 30
-        retries  = 5
-      }
       linuxParameters = {
         initProcessEnabled = true
       }
       essential   = true
-      command     = ["webserver"]
-  environment = var.airflow_task_common_environment
-    environment = var.airflow_task_common_environment
-      user        = "50000:0"
+      command     = ["airflow", "webserver"]
+      environment = var.airflow_task_common_environment
+      healthCheck = {
+        command     = ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 60
+      }
       logConfiguration = {
         logDriver = "awslogs"
         options = {
           awslogs-group         = aws_cloudwatch_log_group.airflow_webserver.name
           awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "airflow-webserver"
+          awslogs-stream-prefix = "ecs"
         }
       }
     }
@@ -112,7 +149,7 @@ resource "aws_ecs_service" "airflow_webserver" {
   deployment_minimum_healthy_percent = 100
   desired_count                      = 1
   lifecycle {
-    ignore_changes = [desired_count]
+    ignore_changes = [desired_count, task_definition]
   }
   enable_execute_command = true
   launch_type            = "FARGATE"
@@ -135,10 +172,10 @@ resource "aws_ecs_service" "airflow_webserver" {
     enable   = true
     rollback = false
   }
-    timeouts {
-      create = "5m"
-      update = "5m"
-    }
+  timeouts {
+    create = "20m"
+    update = "20m"
+  }
 }
 
 # Autoscaling Target

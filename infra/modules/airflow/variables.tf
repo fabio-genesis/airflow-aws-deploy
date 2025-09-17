@@ -31,7 +31,7 @@ variable "iam_role_ecs" {
   description = "IAM role para execução de tasks."
 }
 
-variable "aws_ecr_repository" {
+variable "ecr_repository_url" {
   type        = string
-  description = "Nome do repositório ECR do Airflow."
+  description = "URL do repositório ECR do Airflow."
 }
