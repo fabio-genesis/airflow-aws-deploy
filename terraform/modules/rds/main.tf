@@ -32,15 +32,23 @@ resource "aws_security_group" "airflow_db" {
   }
 }
 
+resource "aws_db_parameter_group" "airflow" {
+  family = "postgres17"
+  name   = "airflow-postgres17"
+
+  tags = {
+    Name = "airflow-postgres17-params"
+  }
+}
+
 resource "aws_db_instance" "airflow" {
   allocated_storage      = 20
   db_name                = var.db_name
   engine                 = "postgres"
-  engine_version         = "14.10"
   instance_class         = "db.t3.micro"
   username               = var.db_username
   password               = var.db_password
-  parameter_group_name   = "default.postgres14"
+  parameter_group_name   = aws_db_parameter_group.airflow.name
   skip_final_snapshot    = true
   db_subnet_group_name   = aws_db_subnet_group.airflow.name
   vpc_security_group_ids = [aws_security_group.airflow_db.id]

@@ -1,11 +1,11 @@
 output "bucket_name" {
   description = "Nome do bucket S3 criado"
-  value       = aws_s3_bucket.airflow_bucket.id
+  value       = data.aws_s3_bucket.airflow_bucket.id
 }
 
 output "bucket_arn" {
   description = "ARN do bucket S3 criado"
-  value       = aws_s3_bucket.airflow_bucket.arn
+  value       = data.aws_s3_bucket.airflow_bucket.arn
 }
 
 output "sns_topic_arn" {
