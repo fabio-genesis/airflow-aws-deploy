@@ -1,2 +1,0 @@
-# Dependências base do Airflow
-apache-airflow==2.8.1

@@ -1,0 +1,3 @@
+apache-airflow-providers-amazon==8.10.0
+boto3==1.28.64
+psycopg2-binary==2.9.9

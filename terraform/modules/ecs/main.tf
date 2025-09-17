@@ -1,0 +1,175 @@
+resource "aws_security_group" "airflow_ecs" {
+  name        = "airflow-ecs-sg"
+  description = "Security group for Airflow ECS tasks"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description = "Airflow Webserver"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "airflow-ecs-sg"
+  }
+}
+
+resource "aws_security_group" "airflow_lb" {
+  name        = "airflow-lb-sg"
+  description = "Security group for Airflow load balancer"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "airflow-lb-sg"
+  }
+}
+
+resource "aws_lb" "airflow" {
+  name               = "airflow-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.airflow_lb.id]
+  subnets            = var.public_subnet_ids
+
+  tags = {
+    Name = "airflow-alb"
+  }
+}
+
+resource "aws_lb_target_group" "airflow" {
+  name     = "airflow-tg"
+  port     = 8080
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+  target_type = "ip"
+  
+  health_check {
+    enabled             = true
+    interval            = 30
+    path                = "/health"
+    port                = "traffic-port"
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+    timeout             = 5
+    matcher             = "200-299"
+  }
+}
+
+resource "aws_lb_listener" "airflow" {
+  load_balancer_arn = aws_lb.airflow.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.airflow.arn
+  }
+}
+
+resource "aws_ecs_cluster" "airflow" {
+  name = "airflow-cluster"
+
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
+
+  tags = {
+    Name = "airflow-ecs-cluster"
+  }
+}
+
+resource "aws_ecs_task_definition" "airflow" {
+  family                   = "airflow"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "1024"
+  memory                   = "2048"
+  execution_role_arn       = var.iam_role_ecs
+  task_role_arn            = var.iam_role_ecs
+
+  container_definitions = jsonencode([
+    {
+      name      = "airflow"
+      image     = var.aws_ecr_repository
+      essential = true
+      
+      environment = [
+        { name = "AIRFLOW__CORE__EXECUTOR", value = "LocalExecutor" },
+        { name = "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN", value = var.db_connection_string },
+        { name = "AIRFLOW__CORE__FERNET_KEY", value = "46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=" },
+        { name = "AIRFLOW__CORE__LOAD_EXAMPLES", value = "false" },
+        { name = "AIRFLOW__CORE__DAGS_FOLDER", value = "/opt/airflow/dags" },
+        { name = "AIRFLOW_CONN_AWS_DEFAULT", value = "aws://" },
+        { name = "AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION", value = "false" },
+        { name = "AIRFLOW_S3_BUCKET", value = var.s3_bucket_name },
+        { name = "AIRFLOW_S3_DAGS_PATH", value = "dags" },
+        { name = "AIRFLOW__WEBSERVER__BASE_URL", value = "http://localhost:8080" }
+      ],
+      
+      portMappings = [
+        {
+          containerPort = 8080
+          hostPort      = 8080
+          protocol      = "tcp"
+        }
+      ],
+      
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/airflow"
+          "awslogs-region"        = "us-east-1"
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+        }
+      }
+    }
+  ])
+}
+
+resource "aws_ecs_service" "airflow" {
+  name            = "airflow-service"
+  cluster         = aws_ecs_cluster.airflow.id
+  task_definition = aws_ecs_task_definition.airflow.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = var.private_subnet_ids
+    security_groups  = [aws_security_group.airflow_ecs.id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.airflow.arn
+    container_name   = "airflow"
+    container_port   = 8080
+  }
+
+  depends_on = [aws_lb_listener.airflow]
+}

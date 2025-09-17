@@ -1,126 +1,179 @@
-# Airflow on ECS Fargate – Deploy Modular
+# Airflow no Amazon ECS com Terraform
 
-Este projeto demonstra como implantar o [Apache Airflow](https://airflow.apache.org/) no Amazon ECS Fargate usando infraestrutura modular com Terraform, Docker e CI/CD.
+Este repositório contém a infraestrutura como código (IaC) para implantar o Apache Airflow em contêineres gerenciados pela Amazon ECS (Elastic Container Service) usando Fargate, com o armazenamento de DAGs em um bucket S3 e todas as configurações definidas usando Terraform.
 
----
+## Arquitetura
 
-## Estrutura do Projeto
+A arquitetura deste projeto inclui:
 
-```
-├── infra/           # Infraestrutura modular (Terraform)
-│   ├── main.tf
-│   ├── providers.tf
-│   ├── variables.tf
-│   ├── versions.tf
-│   ├── README.md
-│   └── modules/
-│       ├── network/
-│       ├── database/
-│       └── app/
-├── app/             # Código do Airflow
-│   ├── dags/
-│   ├── plugins/
-│   ├── deploy_pkg/
-│   └── requirements/
-├── containers/
-│   ├── Dockerfile
-│   └── airflow.env.template
-├── scripts/
-│   ├── build_image.sh
-│   ├── push_ecr.sh
-│   ├── run_task.py
-│   └── put_airflow_worker_autoscaling_metric_data.py
-├── ci/
-│   ├── terraform_plan_apply.yml
-│   ├── docker_build_push.yml
-│   └── lint_test.yml
-├── ops/
-│   ├── README.md
-│   └── runbooks/
-├── .env.example
-├── .gitignore
-├── Makefile
-└── README.md
+- **Amazon ECS (Fargate)**: Para executar o Airflow em contêineres sem a necessidade de gerenciar servidores
+- **Amazon RDS (PostgreSQL)**: Para o banco de dados do Airflow
+- **Amazon S3**: Para armazenar as DAGs do Airflow
+- **Amazon VPC**: Com sub-redes públicas e privadas
+- **Amazon ECR**: Para armazenar a imagem personalizada do Airflow
+
+## Pré-requisitos
+
+- AWS CLI configurada
+- Terraform instalado (v1.0.0+)
+- Docker instalado
+- Permissões na AWS para criar e gerenciar os recursos necessários
+
+## Configuração e Deploy
+
+### 1. Clonar o repositório
+
+```bash
+git clone https://github.com/seu-usuario/airflow-ecs-terraform.git
+cd airflow-ecs-terraform
 ```
 
----
+### 2. Construir a imagem Docker do Airflow
 
-## Instalação e Deploy
-
-### 1. Pré-requisitos
-
-- [Terraform](https://www.terraform.io/downloads.html) >= 0.13.1
-- [Docker](https://docs.docker.com/get-docker/)
-- AWS CLI configurado (`~/.aws/credentials`)
-- Python 3.9+ (para scripts utilitários)
-
-### 2. Configurar variáveis
-
-Edite `.env.example` e copie para `.env` com seus valores (sem segredos em produção).
-
-Edite `containers/airflow.env.template` conforme seu ambiente.
-
-### 3. Inicializar e validar infraestrutura
-
-```sh
-terraform -chdir=infra init
-terraform -chdir=infra validate
-terraform -chdir=infra plan
+```bash
+cd docker
+docker build -t airflow-on-ecs-fargate .
 ```
 
-### 4. Construir e enviar imagem Docker
+### 3. Autenticar no Amazon ECR
 
-```sh
-make build-prod
-export REPO_URI=<uri-do-seu-ecr>
-make push
+```bash
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 730335315247.dkr.ecr.us-east-1.amazonaws.com
 ```
 
-### 5. Aplicar infraestrutura
+### 4. Criar um repositório no ECR (se ainda não existir)
 
-```sh
-terraform -chdir=infra apply
+```bash
+aws ecr create-repository --repository-name airflow-on-ecs-fargate --region us-east-1
 ```
 
-### 6. Inicializar banco de metadados e criar usuário admin
+### 5. Taguear e enviar a imagem para o ECR
 
-```sh
-python3 scripts/run_task.py --profile <aws-profile> --wait-tasks-stopped --command 'db init'
-python3 scripts/run_task.py --profile <aws-profile> --wait-tasks-stopped --command "users create --username airflow --firstname airflow --lastname airflow --password airflow --email airflow@example.com --role Admin"
+```bash
+docker tag airflow-on-ecs-fargate:latest 730335315247.dkr.ecr.us-east-1.amazonaws.com/airflow-on-ecs-fargate:latest
+docker push 730335315247.dkr.ecr.us-east-1.amazonaws.com/airflow-on-ecs-fargate:latest
 ```
 
-### 7. Acessar Airflow
+### 6. Criar o IAM Role para execução das tarefas do ECS (se ainda não existir)
 
-Recupere o DNS do Load Balancer via AWS CLI:
+```bash
+# Criar a política que permite acesso ao S3
+cat > airflow-s3-access-policy.json << EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:ListBucket",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::airflow-dev-test-install",
+        "arn:aws:s3:::airflow-dev-test-install/*"
+      ]
+    }
+  ]
+}
+EOF
 
-```sh
-aws elbv2 describe-load-balancers --query "LoadBalancers[?contains(LoadBalancerName, 'airflow-webserver')].DNSName | [0]" --output text
+aws iam create-policy --policy-name AirflowS3AccessPolicy --policy-document file://airflow-s3-access-policy.json
+
+# Criar a role
+aws iam create-role --role-name airflow-task-execution-role --assume-role-policy-document '{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "ecs-tasks.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}'
+
+# Anexar políticas à role
+aws iam attach-role-policy --role-name airflow-task-execution-role --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+aws iam attach-role-policy --role-name airflow-task-execution-role --policy-arn arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+aws iam attach-role-policy --role-name airflow-task-execution-role --policy-arn arn:aws:iam::$(aws sts get-caller-identity --query 'Account' --output text):policy/AirflowS3AccessPolicy
 ```
 
----
+### 7. Implantar a infraestrutura com Terraform
 
-## CI/CD
+Crie um arquivo `terraform.tfvars` com as variáveis necessárias:
 
-- Workflows básicos em [`ci/`](ci/) para validação Terraform, build/push Docker e lint/test Python.
-- Use o [Makefile](Makefile) para comandos padronizados.
+```hcl
+db_name = "airflow"
+aws_region = "us-east-1"
+db_username = "airflow"
+db_password = "airflow12345"
+iam_role_ecs = "arn:aws:iam::730335315247:role/airflow-task-execution-role"
+aws_ecr_repository = "730335315247.dkr.ecr.us-east-1.amazonaws.com/airflow-on-ecs-fargate:latest"
+airflow_bucket_name = "airflow-dev-test-install"
+```
 
----
+Em seguida, execute:
 
-## Operação
+```bash
+cd ../terraform
+terraform init
+terraform plan -var-file="terraform.tfvars"
+terraform apply -var-file="terraform.tfvars"
+```
 
-Consulte [`ops/README.md`](ops/README.md) para procedimentos operacionais e futuros runbooks.
+### 8. Acessar a interface do Airflow
 
----
+Após a implantação bem-sucedida, a URL da interface do Airflow estará disponível nos outputs do Terraform. Acesse a URL em um navegador para usar o Airflow. O endereço será exibido como `airflow_ui_url` nos outputs.
+
+```bash
+terraform output airflow_ui_url
+```
+
+### 9. Fazer upload das DAGs para o S3
+
+```bash
+# Copiar as DAGs para o bucket S3
+aws s3 sync ./dags/ s3://airflow-dev-test-install/dags/
+```
+
+## Atualização das DAGs
+
+Este sistema está configurado para sincronizar automaticamente as DAGs do bucket S3 com o diretório local do Airflow a cada 30 segundos. Sempre que você adicionar ou modificar uma DAG:
+
+1. Faça o upload da DAG para o bucket S3:
+   ```bash
+   aws s3 cp minha_dag.py s3://airflow-dev-test-install/dags/
+   ```
+
+2. A DAG será sincronizada automaticamente com o container do Airflow em até 30 segundos.
+
+## Como funciona a sincronização das DAGs
+
+O sistema de sincronização automática funciona da seguinte maneira:
+
+1. Quando o container do Airflow é iniciado, o script `entrypoint.sh` executa uma primeira sincronização com o comando `aws s3 sync`.
+
+2. Em seguida, um processo em background é iniciado para verificar e sincronizar as DAGs a cada 30 segundos.
+
+3. O comando `aws s3 sync` com a flag `--delete` garante que:
+   - Novas DAGs sejam adicionadas
+   - DAGs modificadas sejam atualizadas
+   - DAGs removidas do S3 também sejam removidas do ambiente local
+
+4. O Airflow verifica periodicamente o diretório de DAGs para identificar alterações.
+
+## Limpeza
+
+Para destruir toda a infraestrutura quando não for mais necessária:
+
+```bash
+cd terraform
+terraform destroy -var-file="terraform.tfvars"
+```
 
 ## Observações
 
-- Não inclua segredos em arquivos versionados.
-- Após validação, remova qualquer pasta antiga fora do padrão atual.
-- Para dúvidas sobre módulos, veja [`infra/README.md`](infra/README.md).
-
----
-
-## Referências
-
-- [Documentação oficial Airflow](https://airflow.apache.org/docs/)
-- [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+- A senha do banco de dados está em texto simples nas variáveis do Terraform.

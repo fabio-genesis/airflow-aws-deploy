@@ -1,4 +1,0 @@
-# Dependências de produção
--r base.txt
-boto3
-psycopg2-binary
