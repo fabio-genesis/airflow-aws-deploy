@@ -42,6 +42,44 @@ Este repositório foi atualizado com as seguintes correções críticas:
 
 ## Configuração e Deploy
 
+### Configuração Simples (Root Terraform)
+
+Para uma configuração mais simples e direta, você pode usar os arquivos terraform na raiz do projeto:
+
+#### 1. Configurar Variáveis
+
+```bash
+# Copie o arquivo de exemplo
+cp terraform.tfvars.example terraform.tfvars
+
+# Edite com seus valores
+nano terraform.tfvars
+```
+
+#### 2. Deploy da Infraestrutura
+
+```bash
+# Inicialize o Terraform
+terraform init
+
+# Revise o plano de execução
+terraform plan
+
+# Execute o deploy
+terraform apply
+```
+
+Este método criará automaticamente:
+- ✅ **Bucket S3** com pastas `dags/` e `airflow-outputs/`
+- ✅ **IAM Roles** com permissões apropriadas para S3
+- ✅ **RDS PostgreSQL** para metadados do Airflow
+- ✅ **Security Groups** configurados corretamente
+- ✅ **VPC e Subnets** usando a VPC padrão
+
+### Configuração Modular (Terraform Modules)
+
+Para uma configuração mais avançada usando módulos terraform, veja a pasta `terraform/`:
+
 ### 1. Clonar o repositório
 
 ```bash
@@ -170,6 +208,38 @@ Este sistema está configurado para sincronizar automaticamente as DAGs do bucke
    ```
 
 2. A DAG será sincronizada automaticamente com o container do Airflow em até 30 segundos.
+
+## Testando a DAG de Exemplo
+
+O repositório inclui uma DAG de exemplo (`dags/our_first_dag.py`) que demonstra:
+- ✅ Geração de dados sintéticos
+- ✅ Transformação de dados 
+- ✅ Upload para S3 com tratamento de erros
+
+### Para testar a DAG:
+
+1. **Upload da DAG para S3:**
+   ```bash
+   aws s3 cp dags/our_first_dag.py s3://your-bucket-name/dags/
+   ```
+
+2. **Acesse a interface do Airflow** e procure pela DAG `daily_etl_pipeline_with_transform`
+
+3. **Execute a DAG manualmente** para testar todas as funcionalidades
+
+4. **Verifique os resultados no S3:**
+   ```bash
+   aws s3 ls s3://your-bucket-name/airflow-outputs/
+   ```
+
+### Configuração para Desenvolvimento Local
+
+Para testar localmente sem AWS, defina a variável de ambiente:
+```bash
+export SKIP_S3=true
+```
+
+Isso fará com que a DAG funcione sem tentar acessar o S3.
 
 ## Como funciona a sincronização das DAGs
 
