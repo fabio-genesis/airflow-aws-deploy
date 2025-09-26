@@ -15,18 +15,6 @@ A arquitetura deste projeto inclui:
 - **Amazon ECR**: Para armazenar a imagem personalizada do Airflow
 - **Application Load Balancer**: Para distribuir tráfego para o webserver
 
-## Melhorias Recentes
-
-Este repositório foi atualizado com as seguintes correções críticas:
-
-### ✅ Problemas Corrigidos
-- **Docker Entrypoint**: Corrigido loop infinito que impedia a inicialização do Airflow
-- **Dependências**: Corrigido caminho do requirements.txt e adicionadas dependências essenciais
-- **Inicialização do Banco**: Adicionada inicialização automática do banco de dados do Airflow
-- **Separação de Serviços**: Webserver e Scheduler agora executam em serviços ECS separados
-- **Health Checks**: Adicionados health checks para monitoramento adequado
-- **Tratamento de Erros**: Melhorado tratamento de erros no script de inicialização
-- **Sincronização S3**: Aprimorada sincronização de DAGs do S3 com tratamento de erros
 
 ### 🔧 Componentes Principais
 - **Webserver**: Responsável pela interface web (http://load-balancer-dns)
@@ -189,6 +177,3 @@ cd terraform
 terraform destroy -var-file="terraform.tfvars"
 ```
 
-## Observações
-
-- A senha do banco de dados está em texto simples nas variáveis do Terraform.
