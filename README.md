@@ -42,12 +42,6 @@ Este repositório foi atualizado com as seguintes correções críticas:
 
 ## Configuração e Deploy
 
-### 1. Clonar o repositório
-
-```bash
-git clone https://github.com/seu-usuario/airflow-ecs-terraform.git
-cd airflow-ecs-terraform
-```
 
 ### 2. Construir a imagem Docker do Airflow
 
